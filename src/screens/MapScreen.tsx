@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, Text, TouchableOpacity, ScrollView, TextInput, Alert, Platform, Image } from 'react-native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useNavigation } from '@react-navigation/native';
 import Mapbox from '@rnmapbox/maps';
 import { BlurView } from 'expo-blur';
+import { RootStackParamList } from '../navigation/AppNavigator';
 
 import { useAuth } from '../hooks/useAuth';
 import { useEvents, TribeVent } from '../hooks/useEvents';
@@ -16,6 +19,7 @@ Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_KEY || '');
 export default function MapScreen() {
   const { user } = useAuth();
   const { events, joinEvent, createEvent } = useEvents();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   
   const [mode, setMode] = useState<'map' | 'wizard_details' | 'wizard_location' | 'event_chat'>('map');
   const [draft, setDraft] = useState({ title: '', interest: '', isPrivate: false, limit: '10', location: null as any, address: '' });
@@ -26,7 +30,21 @@ export default function MapScreen() {
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
   const scrollRef = React.useRef<ScrollView>(null);
+  const cameraRef = React.useRef<any>(null);
   const [scrollX, setScrollX] = useState(0);
+
+  const [wizardQuery, setWizardQuery] = useState('');
+  const [wizardSuggestions, setWizardSuggestions] = useState<any[]>([]);
+
+  const searchWizardLocation = async (text: string) => {
+    setWizardQuery(text);
+    if(text.length < 3) return setWizardSuggestions([]);
+    try {
+      const res = await fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(text)}.json?access_token=${process.env.EXPO_PUBLIC_MAPBOX_KEY}&autocomplete=true&types=place,address`);
+      const data = await res.json();
+      setWizardSuggestions(data.features || []);
+    } catch(e) {}
+  };
 
   const dummyEvent: any = {
     id: 'tutorial-dummy',
@@ -39,7 +57,7 @@ export default function MapScreen() {
     },
     creatorId: 'system',
     creatorName: 'The Tribes',
-    date: new Date().toISOString(),
+    time: Date.now(),
     participants: [],
     maxParticipants: 10
   };
@@ -102,29 +120,32 @@ export default function MapScreen() {
     return (
       <View style={[StyleSheet.absoluteFill, { zIndex: 9999, elevation: 9999 }]} pointerEvents="box-none">
         {tutStep === 1 && (
-          <View style={{position: 'absolute', top: 55, left: 140, backgroundColor: Colors.surface, padding: 15, borderRadius: 16, width: 240, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 15, elevation: 10, shadowOffset: {width:0, height:5}}}>
+          <View style={{position: 'absolute', top: 95, left: 20, backgroundColor: Colors.surface, padding: 15, borderRadius: 16, width: 240, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 15, elevation: 10}}>
+            <Feather name="arrow-up" color={Colors.primary} size={26} style={{position: 'absolute', top: -19, left: 26}} />
             <Text style={{fontFamily: Typography.bodyBold, color: Colors.text, fontSize: 13, lineHeight: 20}}>
-              <Feather name="arrow-left" color={Colors.primary} size={14} /> Your Leaves. They keep the tribe accountable and prevent flaking!
+              Your Leaves. They keep the tribe accountable and prevent flaking!
             </Text>
             <TouchableOpacity onPress={() => setTutStep(2)} style={{marginTop: 10, alignSelf: 'flex-end'}}><Text style={{color: Colors.primary, fontFamily: Typography.bodyBold}}>Next ›</Text></TouchableOpacity>
           </View>
         )}
         
         {tutStep === 2 && (
-          <View style={{position: 'absolute', top: 120, left: 85, backgroundColor: Colors.surface, padding: 15, borderRadius: 16, width: 240, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 15, elevation: 10, shadowOffset: {width:0, height:5}}}>
+          <View style={{position: 'absolute', top: 110, left: 85, backgroundColor: Colors.surface, padding: 15, borderRadius: 16, width: 240, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 15, elevation: 10}}>
+            <Feather name="arrow-left" color={Colors.primary} size={26} style={{position: 'absolute', top: 14, left: -20}} />
             <Text style={{fontFamily: Typography.bodyBold, color: Colors.text, fontSize: 13, lineHeight: 20}}>
-              <Feather name="arrow-left" color={Colors.primary} size={14} /> The Origin. Lock 5 Leaves to host an event. 80% is returned upon completion.
+              The Origin. Lock 5 Leaves to host an event. 80% is returned upon completion.
             </Text>
             <TouchableOpacity onPress={() => setTutStep(3)} style={{marginTop: 10, alignSelf: 'flex-end'}}><Text style={{color: Colors.primary, fontFamily: Typography.bodyBold}}>Next ›</Text></TouchableOpacity>
           </View>
         )}
 
         {tutStep === 3 && (
-          <View style={{position: 'absolute', bottom: 105, left: 20, backgroundColor: Colors.surface, padding: 15, borderRadius: 16, width: 240, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 15, elevation: 10, shadowOffset: {width:0, height:5}}}>
-            <Text style={{fontFamily: Typography.bodyBold, color: Colors.text, fontSize: 13, lineHeight: 20}}>
-              Slide through dates or hit Filters to drill down to your perfect tech or outdoor adventure. <Feather name="arrow-down" color={Colors.primary} size={14} />
+          <View style={{position: 'absolute', bottom: 105, left: 20, right: 20, backgroundColor: Colors.surface, padding: 15, borderRadius: 16, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 15, elevation: 10}}>
+            <Text style={{fontFamily: Typography.bodyBold, color: Colors.text, fontSize: 14, lineHeight: 20, textAlign: 'center'}}>
+              Slide through dates or hit Filters to drill down to your perfect tech or outdoor adventure.
             </Text>
-            <TouchableOpacity onPress={() => setTutStep(4)} style={{marginTop: 10, alignSelf: 'flex-end'}}><Text style={{color: Colors.primary, fontFamily: Typography.bodyBold}}>Next ›</Text></TouchableOpacity>
+            <TouchableOpacity onPress={() => setTutStep(4)} style={{marginTop: 10, alignSelf: 'center'}}><Text style={{color: Colors.primary, fontFamily: Typography.bodyBold}}>Next ›</Text></TouchableOpacity>
+            <Feather name="arrow-down" color={Colors.primary} size={26} style={{position: 'absolute', bottom: -20, left: '50%', transform: [{translateX: -13}]}} />
           </View>
         )}
 
@@ -177,7 +198,7 @@ export default function MapScreen() {
     if (mode !== 'map') return null;
     return (
       <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
-        <TouchableOpacity style={styles.settingsBtn} onPress={() => signOut(auth)}>
+        <TouchableOpacity style={styles.settingsBtn} onPress={() => navigation.navigate('Settings')}>
           <BlurView intensity={65} tint="light" style={styles.iconWrapper}>
             <Text style={{fontSize: 16}}>⚙️</Text>
           </BlurView>
@@ -246,11 +267,30 @@ export default function MapScreen() {
     <View style={styles.glassWrapperBottom}>
       <BlurView intensity={85} tint="light" style={styles.glassPanelBottom}>
         <Text style={styles.panelTitle}>Design your tribe's event</Text>
-        <TextInput style={styles.input} placeholder="Title (e.g. Morning Run)" placeholderTextColor="#888" value={draft.title} onChangeText={(t) => setDraft({...draft, title: t})} />
-        <TextInput style={styles.input} placeholder="Category (e.g. Sports)" placeholderTextColor="#888" value={draft.interest} onChangeText={(t) => setDraft({...draft, interest: t})} />
+        <TextInput style={styles.input} placeholder="Title (e.g. Morning Run)" placeholderTextColor="#999" value={draft.title} onChangeText={(t) => setDraft({...draft, title: t})} />
+        <TextInput style={styles.input} placeholder="Category (e.g. Sports)" placeholderTextColor="#999" value={draft.interest} onChangeText={(t) => setDraft({...draft, interest: t})} />
+        
+        <TextInput style={styles.input} placeholder="Location Base (City/Street)" placeholderTextColor="#999" value={wizardQuery} onChangeText={searchWizardLocation} />
+        {wizardSuggestions.length > 0 && (
+          <View style={styles.suggestionsContainer}>
+            {wizardSuggestions.map((s, i) => (
+              <TouchableOpacity key={i} style={styles.suggestionItem} onPress={() => { 
+                setDraft({...draft, location: { lat: s.center[1], lng: s.center[0] }, address: s.place_name}); 
+                setWizardSuggestions([]); 
+                setWizardQuery(s.place_name); 
+              }}>
+                <Text style={styles.suggestionText}>{s.place_name}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
         <View style={styles.row}>
           <TouchableOpacity style={styles.btnSecondary} onPress={() => setMode('map')}><Text style={styles.btnSecondaryText}>Cancel</Text></TouchableOpacity>
-          <TouchableOpacity style={styles.btnPrimary} onPress={() => setMode('wizard_location')}><Text style={styles.btnPrimaryText}>Set Path 📍</Text></TouchableOpacity>
+          <TouchableOpacity style={styles.btnPrimary} onPress={() => {
+             if (draft.location) cameraRef.current?.setCamera({centerCoordinate: [draft.location.lng, draft.location.lat], zoomLevel: 14, animationDuration: 1000});
+             setMode('wizard_location');
+          }}><Text style={styles.btnPrimaryText}>Set Path 📍</Text></TouchableOpacity>
         </View>
       </BlurView>
     </View>
@@ -264,7 +304,7 @@ export default function MapScreen() {
         {draft.location && (
           <View style={styles.row}>
              <TouchableOpacity style={styles.btnSecondary} onPress={() => setMode('wizard_details')}><Text style={styles.btnSecondaryTextDark}>Back</Text></TouchableOpacity>
-             <TouchableOpacity style={styles.btnPrimary} onPress={handleCreate}><Text style={styles.btnPrimaryText}>Lock 5 <Image source={require('../assets/leaf.png')} style={[styles.inlineIcon, {tintColor: '#fff'}]} /> & Finalize</Text></TouchableOpacity>
+             <TouchableOpacity style={styles.btnPrimary} onPress={handleCreate}><Text style={styles.btnPrimaryText}>Lock 5 <Image source={require('../assets/leaf.png')} style={styles.inlineIcon} tintColor="#fff" /> & Finalize</Text></TouchableOpacity>
           </View>
         )}
       </BlurView>
@@ -282,7 +322,7 @@ export default function MapScreen() {
           <View style={styles.chatHeader}>
              <View style={{flex: 1}}>
                 <Text style={styles.chatTitle} numberOfLines={1}>{selectedEvent.title}</Text>
-                <Text style={styles.chatSub}>{selectedEvent.participants.length} / {selectedEvent.participantLimit} Attending • {format(selectedEvent.time, 'MMM d, h:mm a')}</Text>
+                <Text style={styles.chatSub}>{selectedEvent.participants.length} / {selectedEvent.participantLimit} Attending • {selectedEvent.time ? format(new Date(selectedEvent.time), 'MMM d, h:mm a') : 'TBD'}</Text>
              </View>
              <TouchableOpacity onPress={() => { setSelectedEvent(null); setMode('map'); }}><Text style={styles.closeIcon}>✖</Text></TouchableOpacity>
           </View>
@@ -294,7 +334,7 @@ export default function MapScreen() {
               <Text style={styles.chatLockedIco}>💬</Text>
               <Text style={styles.chatLockedTitle}>Tribal Chat is Locked</Text>
               <Text style={styles.chatLockedSub}>Commit 1 <Image source={require('../assets/leaf.png')} style={styles.inlineIcon} /> to join the event and open communications with this tribe.</Text>
-              <TouchableOpacity style={styles.btnPrimaryFull} onPress={handleJoin}><Text style={styles.btnPrimaryText}>Join Tribe (1 <Image source={require('../assets/leaf.png')} style={[styles.inlineIcon, {tintColor: '#fff'}]} />)</Text></TouchableOpacity>
+              <TouchableOpacity style={styles.btnPrimaryFull} onPress={handleJoin}><Text style={styles.btnPrimaryText}>Join Tribe (1 <Image source={require('../assets/leaf.png')} style={styles.inlineIcon} tintColor="#fff" />)</Text></TouchableOpacity>
             </View>
           ) : (
             <View style={styles.chatOpen}>
@@ -405,6 +445,9 @@ const styles = StyleSheet.create({
   panelTitleDark: { fontFamily: Typography.heading, fontSize: 22, color: '#fff', marginBottom: 5 },
   panelSubDark: { fontFamily: Typography.body, fontSize: 14, color: 'rgba(255,255,255,0.8)', marginBottom: 20 },
   input: { fontFamily: Typography.body, borderWidth: 1, borderColor: 'rgba(255,255,255,0.8)', backgroundColor: 'rgba(255,255,255,0.8)', borderRadius: 16, padding: 16, marginBottom: 15, fontSize: 15, color: Colors.text },
+  suggestionsContainer: { backgroundColor: '#fff', borderRadius: 16, borderWidth: 1, borderColor: '#eee', maxHeight: 120, overflow: 'hidden', marginTop: -5, marginBottom: 15 },
+  suggestionItem: { padding: 12, borderBottomWidth: 1, borderBottomColor: '#f5f5f5' },
+  suggestionText: { fontFamily: Typography.body, fontSize: 13, color: Colors.text },
   
   row: { flexDirection: 'row', gap: 10, justifyContent: 'flex-end' },
   btnPrimary: { backgroundColor: Colors.primary, paddingHorizontal: 22, paddingVertical: 14, borderRadius: 16 },

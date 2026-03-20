@@ -25,11 +25,14 @@ export default function MapScreen() {
 
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
+  const scrollRef = React.useRef<ScrollView>(null);
+  const [scrollX, setScrollX] = useState(0);
 
   const joinedEvents = events.filter(e => e.participants?.includes(user?.uid || ''));
 
   const handleScroll = (event: any) => {
     const { contentOffset, layoutMeasurement, contentSize } = event.nativeEvent;
+    setScrollX(contentOffset.x);
     setCanScrollLeft(contentOffset.x > 5);
     setCanScrollRight(contentOffset.x + layoutMeasurement.width < contentSize.width - 5);
   };
@@ -179,11 +182,12 @@ export default function MapScreen() {
         <View style={styles.bottomBar} pointerEvents="box-none">
           <BlurView intensity={65} tint="light" style={styles.dateSliderContainer}>
             {canScrollLeft && (
-              <View style={styles.scrollIndicatorLeft} pointerEvents="none">
+              <TouchableOpacity style={styles.scrollIndicatorLeft} onPress={() => scrollRef.current?.scrollTo({ x: Math.max(0, scrollX - 150), animated: true })}>
                 <Feather name="chevron-left" size={16} color={Colors.primaryDark} />
-              </View>
+              </TouchableOpacity>
             )}
             <ScrollView 
+               ref={scrollRef}
                horizontal showsHorizontalScrollIndicator={false} 
                contentContainerStyle={{paddingHorizontal: 12}}
                onScroll={handleScroll}
@@ -196,9 +200,9 @@ export default function MapScreen() {
               ))}
             </ScrollView>
             {canScrollRight && (
-              <View style={styles.scrollIndicatorRight} pointerEvents="none">
+              <TouchableOpacity style={styles.scrollIndicatorRight} onPress={() => scrollRef.current?.scrollTo({ x: scrollX + 150, animated: true })}>
                 <Feather name="chevron-right" size={16} color={Colors.primaryDark} />
-              </View>
+              </TouchableOpacity>
             )}
           </BlurView>
 

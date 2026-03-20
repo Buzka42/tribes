@@ -285,7 +285,7 @@ export default function MapScreen() {
   return (
     <View style={styles.container}>
       <Mapbox.MapView style={styles.map} logoEnabled={false} attributionEnabled={false} onPress={handleMapPress}>
-        <Mapbox.Camera zoomLevel={13} centerCoordinate={[19.0238, 50.2649]} />
+        <Mapbox.Camera zoomLevel={13} centerCoordinate={[user?.homeLocation?.longitude || 19.0238, user?.homeLocation?.latitude || 50.2649]} />
         
         {events.map(ev => (
           <Mapbox.PointAnnotation

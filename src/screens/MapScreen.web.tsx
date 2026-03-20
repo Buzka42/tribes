@@ -288,7 +288,7 @@ export default function MapScreen() {
   return (
     <View style={styles.container}>
       <Map
-        initialViewState={{ longitude: 19.0238, latitude: 50.2649, zoom: 12.5 }}
+        initialViewState={{ longitude: user?.homeLocation?.longitude || 19.0238, latitude: user?.homeLocation?.latitude || 50.2649, zoom: 12.5 }}
         style={{ width: '100%', height: '100%' }}
         mapStyle="mapbox://styles/mapbox/light-v11"
         mapboxAccessToken={process.env.EXPO_PUBLIC_MAPBOX_KEY}

@@ -28,6 +28,23 @@ export default function MapScreen() {
   const scrollRef = React.useRef<ScrollView>(null);
   const [scrollX, setScrollX] = useState(0);
 
+  const dummyEvent: any = {
+    id: 'tutorial-dummy',
+    title: 'Sunset Hike 🌄',
+    interest: 'Outdoor',
+    description: 'A simulation event to learn how joining works. Your Leaves will be instantly refunded since this is a test!',
+    location: { 
+      latitude: (user?.homeLocation?.latitude || 50.2649) + 0.003, 
+      longitude: (user?.homeLocation?.longitude || 19.0238) + 0.003 
+    },
+    creatorId: 'system',
+    creatorName: 'The Tribes',
+    date: new Date().toISOString(),
+    participants: [],
+    maxParticipants: 10
+  };
+
+  const displayEvents = tutStep === 4 ? [...events, dummyEvent] : events;
   const joinedEvents = events.filter(e => e.participants?.includes(user?.uid || ''));
 
   const handleScroll = (event: any) => {
@@ -63,9 +80,18 @@ export default function MapScreen() {
   };
 
   const handleJoin = async () => {
-    if(!selectedEvent) return;
+    if (!selectedEvent || !user) return;
+    if (selectedEvent.id === 'tutorial-dummy') {
+      Alert.alert('Congratulations! 🌟', 'You successfully joined your first event! Since this is a test simulation, your 1 Leaf 🍃 has been instantly refunded. Welcome to The Tribes!');
+      setMode('map');
+      setTutStep(0);
+      return;
+    }
+    if (user.tokens < 1) {
+      Alert.alert('Out of Leaves! 🍂', 'You need at least 1 leaf to join. Wait for refunds from past events.');
+      return;
+    }
     try {
-      if ((user?.tokens || 0) < 1) { Alert.alert("Out of Leaves", "You need 1 Leaf to join."); return; }
       await joinEvent(selectedEvent.id);
       Alert.alert("Joined", "You've secured your spot. Chat is now unlocked!");
     } catch(e:any) { Alert.alert("Error", e.message); }
@@ -102,12 +128,12 @@ export default function MapScreen() {
           </View>
         )}
 
-        {tutStep === 4 && (
-          <View style={{position: 'absolute', top: '50%', left: '50%', transform: [{translateX: -160}, {translateY: -100}], backgroundColor: Colors.surface, padding: 25, borderRadius: 24, width: 320, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 15, elevation: 10, shadowOffset: {width:0, height:5}}}>
-            <Text style={{fontFamily: Typography.heading, fontSize: 22, color: Colors.text, marginBottom: 8}}>Simulation Phase</Text>
-            <Text style={{fontFamily: Typography.body, color: Colors.text, fontSize: 14, lineHeight: 22, marginBottom: 15}}>Let's pretend a "Sunset Hike" just spawned on the map. Joining it will deduct 1 <Image source={require('../assets/leaf.png')} style={styles.inlineIcon} />. If you flake, the token is burned 🔥. If you show up, the token is instantly fully refunded!</Text>
-            <TouchableOpacity style={styles.btnPrimaryFull} onPress={() => { setTutStep(0); Alert.alert('Welcome!', 'The map is yours.');}}>
-               <Text style={styles.btnPrimaryText}>Got it! Let's start!</Text>
+        {tutStep === 4 && mode === 'map' && (
+          <View style={{position: 'absolute', top: 120, left: '50%', transform: [{translateX: -160}], backgroundColor: Colors.surface, padding: 20, borderRadius: 24, width: 320, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 15, elevation: 10, shadowOffset: {width:0, height:5}}}>
+            <Text style={{fontFamily: Typography.heading, fontSize: 20, color: Colors.text, marginBottom: 6}}>Simulation Phase</Text>
+            <Text style={{fontFamily: Typography.body, color: Colors.text, fontSize: 13, lineHeight: 20, marginBottom: 15}}>A test event <Text style={{fontFamily: Typography.bodyBold}}>Sunset Hike 🌄</Text> just spawned near your location! Tap its green pin on the map to see how joining works.</Text>
+            <TouchableOpacity onPress={() => { setTutStep(0); Alert.alert('Welcome!', 'The map is yours.'); }} style={{alignSelf: 'center', paddingVertical: 8, marginTop: 5}}>
+               <Text style={{color: Colors.textLight, fontFamily: Typography.bodyBold}}>Skip Simulation</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -291,7 +317,7 @@ export default function MapScreen() {
       <Mapbox.MapView style={styles.map} logoEnabled={false} attributionEnabled={false} onPress={handleMapPress}>
         <Mapbox.Camera zoomLevel={13} centerCoordinate={[user?.homeLocation?.longitude || 19.0238, user?.homeLocation?.latitude || 50.2649]} />
         
-        {events.map(ev => (
+        {displayEvents.map(ev => (
           <Mapbox.PointAnnotation
             key={ev.id}
             id={ev.id}

@@ -1,11 +1,15 @@
 import React from 'react';
-import { View, StyleSheet, Text, Button, ScrollView } from 'react-native';
+import { View, StyleSheet, Text, Button } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { useAuth } from '../hooks/useAuth';
 import { useEvents } from '../hooks/useEvents';
 import { auth } from '../config/firebase';
 import { signOut } from 'firebase/auth';
+
+// True Mapbox Web SDK implementation specifically mapped to MapScreen.web.tsx
+import Map, { Marker } from 'react-map-gl';
+import 'mapbox-gl/dist/mapbox-gl.css';
 
 type MapScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Map'>;
 interface Props { navigation: MapScreenNavigationProp; }
@@ -16,18 +20,28 @@ export default function MapScreen({ navigation }: Props) {
   
   return (
     <View style={styles.container}>
-      <View style={styles.webPlaceholder}>
-        <Text style={styles.webPlaceholderText}>[ Mapbox Simulated Container ]</Text>
-        <Text style={{ marginBottom: 20 }}>Events rendered theoretically on map:</Text>
-        <ScrollView style={{ maxHeight: 200, width: '100%', paddingHorizontal: 40 }}>
-          {events.map(ev => (
-            <View key={ev.id} style={styles.mockPin}>
-              <Text style={{fontWeight: 'bold'}}>{ev.title}</Text>
-              <Text>Vis: {ev.isPrivate ? 'Approx Region 500m' : 'Exact Pin'}</Text>
-            </View>
-          ))}
-        </ScrollView>
-      </View>
+      <Map
+        initialViewState={{ longitude: 19.0238, latitude: 50.2649, zoom: 12 }}
+        style={{ width: '100%', height: '100%' }}
+        mapStyle="mapbox://styles/mapbox/dark-v11"
+        mapboxAccessToken={process.env.EXPO_PUBLIC_MAPBOX_KEY}
+      >
+        {events.map(ev => (
+          <Marker 
+            key={ev.id} 
+            longitude={ev.location.longitude} 
+            latitude={ev.location.latitude}
+            anchor="center"
+          >
+            <View style={[
+              styles.pinBase, 
+              ev.isPrivate ? styles.pinPrivate : styles.pinPublic,
+              ev.isExternal && styles.pinExternal
+            ]} />
+          </Marker>
+        ))}
+      </Map>
+
       <View style={styles.overlay}>
         <Text style={styles.title}>Welcome, {user?.displayName}</Text>
         <Text style={styles.tokens}>Balance: {user?.tokens} 🪙</Text>
@@ -54,10 +68,11 @@ const styles = StyleSheet.create({
   title: { fontSize: 18, fontWeight: 'bold', marginBottom: 5, textAlign: 'center' },
   tokens: { fontSize: 16, color: '#d4af37', fontWeight: 'bold', textAlign: 'center', marginBottom: 15 },
   buttonRow: { flexDirection: 'row', gap: 10 },
-  webPlaceholder: { flex: 1, backgroundColor: '#e1e1e1', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#c1c1c1', borderStyle: 'dashed' },
-  webPlaceholderText: { fontSize: 20, fontWeight: 'bold', color: '#333', marginBottom: 8 },
-  mockPin: { backgroundColor: '#fff', padding: 10, marginVertical: 5, borderRadius: 8, borderWidth: 1, borderColor: '#ccc' },
   filterIcon: { position: 'absolute', top: 50, right: 20 },
   bottomSlider: { position: 'absolute', bottom: 40, left: 20, right: 20, backgroundColor: 'white', padding: 15, borderRadius: 20, opacity: 0.95, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 10, elevation: 10 },
-  sliderText: { textAlign: 'center', fontSize: 14, fontWeight: 'bold' }
+  sliderText: { textAlign: 'center', fontSize: 14, fontWeight: 'bold' },
+  pinBase: { borderWidth: 2, borderColor: 'white' },
+  pinPublic: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#e74c3c' },
+  pinPrivate: { width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(52, 152, 219, 0.4)', borderWidth: 1, borderColor: '#3498db' },
+  pinExternal: { backgroundColor: '#9b59b6' } 
 });

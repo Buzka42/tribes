@@ -1,5 +1,6 @@
 # Changelog
 
+- feat: Integrated interactive `react-map-gl` standard Mapbox module over the placeholder web proxy map to render real maps on PC browsers for robust testing without simulators
 - feat: Developed Firebase Cloud Functions background task leveraging `@google/genai` to automatically harvest Facebook events via Google Search Grounding
 - feat: Added Google Auth popup integration to LoginScreen alongside email provider
 - feat: Enabled realtime rendering of Firestore Events on both native Mapbox and web placeholder

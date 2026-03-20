@@ -156,7 +156,7 @@ export default function MapScreen() {
 
         <View style={styles.topLeft} pointerEvents="box-none">
           <BlurView intensity={70} tint="light" style={styles.balancePill}>
-            <Text style={styles.balanceText}>{user?.tokens} <Image source={require('../assets/leaf.png')} style={styles.inlineIcon} /> Balance</Text>
+            <Text style={styles.balanceText}>{user?.tokens} <Image source={require('../assets/leaf.png')} style={styles.inlineIcon} /></Text>
           </BlurView>
           
           <View style={styles.upcomingRow}>
@@ -308,7 +308,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   settingsBtn: { position: 'absolute', top: 35, right: 20 },
   iconWrapper: { padding: 12, borderRadius: 25, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 10 },
-  inlineIcon: { width: 15, height: 15, resizeMode: 'contain', marginLeft: 2 },
+  inlineIcon: { width: 17, height: 17, resizeMode: 'contain', marginHorizontal: 2, transform: [{ translateY: 3 }] },
   
   devPanel: { position: 'absolute', top: 110, right: 20, backgroundColor: 'rgba(200, 50, 50, 0.85)', padding: 18, borderRadius: 16, zIndex: 1000, elevation: 1000, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 15 },
   devTitle: { fontFamily: Typography.heading, color: '#fff', fontSize: 13, marginBottom: 12, textAlign: 'center', letterSpacing: 2 },
@@ -320,8 +320,8 @@ const styles = StyleSheet.create({
   balanceText: { fontFamily: Typography.bodyBold, color: Colors.primaryDark, fontSize: 13, letterSpacing: 0.5 },
   
   upcomingRow: { flexDirection: 'row', alignItems: 'center' },
-  plusBtn: { width: 44, height: 44, backgroundColor: Colors.primary, borderRadius: 22, justifyContent: 'center', alignItems: 'center', shadowColor: Colors.primaryDark, shadowOpacity: 0.4, shadowRadius: 10, elevation: 5 },
-  plusIcon: { width: 22, height: 22, resizeMode: 'contain', tintColor: '#fff', marginTop: -4 },
+  plusBtn: { width: 50, height: 50, justifyContent: 'center', alignItems: 'center', shadowColor: Colors.primaryDark, shadowOpacity: 0.4, shadowRadius: 10, shadowOffset: { width: 0, height: 5 }, elevation: 5 },
+  plusIcon: { width: '100%', height: '100%', resizeMode: 'contain' },
   upcomingScroll: { marginLeft: 12, maxWidth: 220 },
   upcomingIcon: { width: 40, height: 40, backgroundColor: 'rgba(255,255,255,0.85)', borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginRight: 10, borderWidth: 1, borderColor: '#eee', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 5 },
   upcomingInitial: { fontFamily: Typography.bodyBold, color: Colors.text, fontSize: 15 },

@@ -205,6 +205,7 @@ export default function MapScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
+  map: { flex: 1 },
   settingsBtn: { position: 'absolute', top: 50, right: 20, backgroundColor: Colors.glassBg, padding: 12, borderRadius: 50, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 10, borderWidth: 1, borderColor: Colors.glassBorder, elevation: 5 },
   
   topLeft: { position: 'absolute', top: 50, left: 20 },

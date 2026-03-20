@@ -170,7 +170,7 @@ export default function MapScreen() {
       >
         {events.map(ev => (
           <Marker key={ev.id} longitude={ev.location.longitude} latitude={ev.location.latitude} anchor="center"
-            onClick={e => {
+            onClick={(e: any) => {
               if(mode === 'map') { e.originalEvent.stopPropagation(); setSelectedEvent(ev); setMode('event_chat'); }
             }}
           >

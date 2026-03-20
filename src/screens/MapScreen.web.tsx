@@ -24,11 +24,11 @@ export default function MapScreen() {
   const [dateFilter, setDateFilter] = useState('30 Days');
   const [tutStep, setTutStep] = useState(0);
 
-  React.useEffect(() => {
-    if (user?.tokens === 10 && events.length === 0) setTutStep(1);
-  }, [user?.tokens, events.length]);
-
   const joinedEvents = events.filter(e => e.participants?.includes(user?.uid || ''));
+
+  React.useEffect(() => {
+    if (user?.tokens === 10 && joinedEvents.length === 0) setTutStep(1);
+  }, [user?.tokens, joinedEvents.length]);
 
   const handleMapClick = (e: MapMouseEvent) => {
     if (mode === 'wizard_location') {
@@ -285,7 +285,7 @@ const styles = StyleSheet.create({
   
   upcomingRow: { flexDirection: 'row', alignItems: 'center' },
   plusBtn: { width: 44, height: 44, backgroundColor: Colors.primary, borderRadius: 22, justifyContent: 'center', alignItems: 'center', shadowColor: Colors.primaryDark, shadowOpacity: 0.4, shadowRadius: 10, elevation: 5 },
-  plusBtnText: { color: '#fff', fontSize: 24, fontWeight: '400' },
+  plusBtnText: { color: '#fff', fontSize: 28, fontWeight: '400', marginTop: -4, lineHeight: 30 },
   upcomingScroll: { marginLeft: 12, maxWidth: 220 },
   upcomingIcon: { width: 40, height: 40, backgroundColor: 'rgba(255,255,255,0.85)', borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginRight: 10, borderWidth: 1, borderColor: '#eee', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 5 },
   upcomingInitial: { fontFamily: Typography.bodyBold, color: Colors.text, fontSize: 15 },

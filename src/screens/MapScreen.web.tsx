@@ -1,41 +1,162 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, Text, TouchableOpacity, Alert } from 'react-native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { RootStackParamList } from '../navigation/AppNavigator';
+import { View, StyleSheet, Text, TouchableOpacity, ScrollView, TextInput, Alert } from 'react-native';
+import Map, { Marker, MapMouseEvent } from 'react-map-gl/mapbox';
+import 'mapbox-gl/dist/mapbox-gl.css';
+
 import { useAuth } from '../hooks/useAuth';
 import { useEvents, TribeVent } from '../hooks/useEvents';
 import { auth } from '../config/firebase';
 import { signOut } from 'firebase/auth';
-import EventModal from '../components/EventModal';
 import { Colors, Typography } from '../theme';
 
-import Map, { Marker } from 'react-map-gl/mapbox';
-import 'mapbox-gl/dist/mapbox-gl.css';
-
-type MapScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Map'>;
-interface Props { navigation: MapScreenNavigationProp; }
-
-export default function MapScreen({ navigation }: Props) {
+export default function MapScreen() {
   const { user } = useAuth();
-  const { events, joinEvent } = useEvents();
+  const { events, joinEvent, createEvent } = useEvents();
+  
+  const [mode, setMode] = useState<'map' | 'wizard_details' | 'wizard_location' | 'event_chat'>('map');
+  const [draft, setDraft] = useState({ title: '', interest: '', isPrivate: false, limit: '10', location: null as any, address: '' });
   const [selectedEvent, setSelectedEvent] = useState<TribeVent | null>(null);
-  const [isJoining, setIsJoining] = useState(false);
+  const [dateFilter, setDateFilter] = useState('All');
 
-  const handleJoin = async (eventId: string) => {
-    setIsJoining(true);
-    try {
-      if ((user?.tokens || 0) < 1) {
-        Alert.alert("Out of Leaves", "You need at least 1 🍃 to conditionally join this tribe.");
-        return;
-      }
-      await joinEvent(eventId);
-      Alert.alert("Joined!", "You are now officially part of this tribe's event. Your token has been dedicated as commitment.");
-      setSelectedEvent(null);
-    } catch (error: any) {
-      Alert.alert("Error", error.message);
-    } finally {
-      setIsJoining(false);
+  const joinedEvents = events.filter(e => e.participants?.includes(user?.uid || ''));
+
+  const handleMapClick = (e: MapMouseEvent) => {
+    if (mode === 'wizard_location') {
+      setDraft({ ...draft, location: { lat: e.lngLat.lat, lng: e.lngLat.lng } });
     }
+  };
+
+  const handleCreate = async () => {
+    try {
+      if (!draft.title || !draft.interest || !draft.location) return Alert.alert("Incomplete", "Make sure title, category, and location are set.");
+      await createEvent(draft.title, draft.interest, parseInt(draft.limit) || 10, draft.isPrivate, 5, {
+        latitude: draft.location.lat,
+        longitude: draft.location.lng,
+        address: draft.address || "Pinned carefully"
+      });
+      setMode('map');
+      setDraft({ title: '', interest: '', isPrivate: false, limit: '10', location: null, address: '' });
+      Alert.alert("Tribe Assembled", "Your event is live. 5 🍃 were locked.");
+    } catch(err: any) { Alert.alert("Error", err.message); }
+  };
+
+  const handleJoin = async () => {
+    if(!selectedEvent) return;
+    try {
+      await joinEvent(selectedEvent.id);
+      Alert.alert("Joined", "You've successfully secured a spot. Chat unlocked.");
+    } catch(e:any) { Alert.alert("Error", e.message); }
+  }
+
+  // UIs
+  const renderHUD = () => {
+    if (mode !== 'map') return null;
+    return (
+      <>
+        {/* Top Right Settings */}
+        <TouchableOpacity style={styles.settingsBtn} onPress={() => signOut(auth)}>
+          <Text style={{fontSize: 16}}>⚙️</Text>
+        </TouchableOpacity>
+
+        {/* Top Left Base */}
+        <View style={styles.topLeft}>
+          <View style={styles.balancePill}>
+            <Text style={styles.balanceText}>{user?.tokens} 🍃</Text>
+          </View>
+          <View style={styles.upcomingRow}>
+            <TouchableOpacity style={styles.plusBtn} onPress={() => setMode('wizard_details')}>
+              <Text style={styles.plusBtnText}>+</Text>
+            </TouchableOpacity>
+            
+            {joinedEvents.length > 0 && (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.upcomingScroll}>
+                {joinedEvents.map(e => (
+                  <TouchableOpacity key={e.id} style={styles.upcomingIcon} onPress={() => { setSelectedEvent(e); setMode('event_chat'); }}>
+                    <Text style={styles.upcomingInitial}>{e.title.charAt(0)}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
+          </View>
+        </View>
+
+        {/* Bottom Filters */}
+        <View style={styles.bottomBar}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.dateScroll}>
+            {['All', 'Today', 'Tomorrow', 'Weekend', 'Next Week'].map(d => (
+              <TouchableOpacity key={d} onPress={() => setDateFilter(d)} style={[styles.datePill, dateFilter === d && styles.datePillActive]}>
+                <Text style={[styles.datePillText, dateFilter === d && styles.datePillTextActive]}>{d}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+          <TouchableOpacity style={styles.filterBtn}>
+            <Text style={styles.filterBtnText}>Filters</Text>
+          </TouchableOpacity>
+        </View>
+      </>
+    );
+  };
+
+  const renderWizardDetails = () => (
+    <View style={styles.glassPanelBottom}>
+      <Text style={styles.panelTitle}>Design your tribe's event</Text>
+      <TextInput style={styles.input} placeholder="Title (e.g. Morning Run)" value={draft.title} onChangeText={(t) => setDraft({...draft, title: t})} />
+      <TextInput style={styles.input} placeholder="Category (e.g. Sports)" value={draft.interest} onChangeText={(t) => setDraft({...draft, interest: t})} />
+      <View style={{flexDirection: 'row', gap: 10, justifyContent: 'flex-end'}}>
+        <TouchableOpacity style={styles.btnSecondary} onPress={() => setMode('map')}><Text style={styles.btnSecondaryText}>Cancel</Text></TouchableOpacity>
+        <TouchableOpacity style={styles.btnPrimary} onPress={() => setMode('wizard_location')}><Text style={styles.btnPrimaryText}>Set Path 📍</Text></TouchableOpacity>
+      </View>
+    </View>
+  );
+
+  const renderWizardLocation = () => (
+    <View style={styles.glassPanelTop}>
+      <Text style={styles.panelTitleDark}>Drop the pin exactly where</Text>
+      <Text style={styles.panelSub}>Tap anywhere on the map to anchor coordinates.</Text>
+      {draft.location && (
+        <View style={styles.row}>
+           <TouchableOpacity style={styles.btnSecondary} onPress={() => setMode('wizard_details')}><Text style={styles.btnSecondaryText}>Back</Text></TouchableOpacity>
+           <TouchableOpacity style={styles.btnPrimary} onPress={handleCreate}><Text style={styles.btnPrimaryText}>Lock 5 🍃 & Finalize</Text></TouchableOpacity>
+        </View>
+      )}
+    </View>
+  );
+
+  const renderEventChat = () => {
+    if(!selectedEvent) return null;
+    const isJoined = selectedEvent.participants.includes(user?.uid || '');
+    const isHost = selectedEvent.creatorId === user?.uid;
+
+    return (
+      <View style={styles.glassPanelBottomFull}>
+        <View style={styles.chatHeader}>
+           <View>
+              <Text style={styles.chatTitle}>{selectedEvent.title}</Text>
+              <Text style={styles.chatSub}>{selectedEvent.participants.length} / {selectedEvent.participantLimit} Attending</Text>
+           </View>
+           <TouchableOpacity onPress={() => { setSelectedEvent(null); setMode('map'); }}><Text style={styles.closeIcon}>✖</Text></TouchableOpacity>
+        </View>
+        
+        {!isJoined && !isHost ? (
+          <View style={styles.chatLocked}>
+            <Text style={styles.chatLockedIco}>💬</Text>
+            <Text style={styles.chatLockedTitle}>Tribal Chat is Locked</Text>
+            <Text style={styles.chatLockedSub}>Commit 1 🍃 to join the event and open communications with this tribe.</Text>
+            <TouchableOpacity style={styles.btnPrimaryFull} onPress={handleJoin}><Text style={styles.btnPrimaryText}>Join Tribe (1 🍃)</Text></TouchableOpacity>
+          </View>
+        ) : (
+          <View style={styles.chatOpen}>
+            <ScrollView style={styles.chatScroll}>
+               <View style={styles.chatBubble}><Text style={styles.chatText}>Welcome to the tribe! See you there.</Text></View>
+            </ScrollView>
+            <View style={styles.chatInputRow}>
+               <TextInput style={styles.chatInput} placeholder="Send a scroll..." />
+               <TouchableOpacity style={styles.btnPrimary}><Text style={styles.btnPrimaryText}>Send</Text></TouchableOpacity>
+            </View>
+          </View>
+        )}
+      </View>
+    );
   };
 
   return (
@@ -45,73 +166,90 @@ export default function MapScreen({ navigation }: Props) {
         style={{ width: '100%', height: '100%' }}
         mapStyle="mapbox://styles/mapbox/light-v11"
         mapboxAccessToken={process.env.EXPO_PUBLIC_MAPBOX_KEY}
+        onClick={handleMapClick}
       >
         {events.map(ev => (
-          <Marker 
-            key={ev.id} 
-            longitude={ev.location.longitude} 
-            latitude={ev.location.latitude}
-            anchor="center"
+          <Marker key={ev.id} longitude={ev.location.longitude} latitude={ev.location.latitude} anchor="center"
             onClick={e => {
-              e.originalEvent.stopPropagation();
-              setSelectedEvent(ev);
+              if(mode === 'map') { e.originalEvent.stopPropagation(); setSelectedEvent(ev); setMode('event_chat'); }
             }}
           >
-            <View style={[
-              styles.pinBase, 
-              ev.isPrivate ? styles.pinPrivate : styles.pinPublic,
-              ev.isExternal && styles.pinExternal
-            ]} />
+            <View style={[ styles.pinBase, ev.isPrivate ? styles.pinPrivate : styles.pinPublic ]} />
           </Marker>
         ))}
+        {mode === 'wizard_location' && draft.location && (
+          <Marker longitude={draft.location.lng} latitude={draft.location.lat} anchor="center">
+            <View style={[styles.pinBase, styles.pinDraft]} />
+          </Marker>
+        )}
       </Map>
 
-      <View style={styles.overlayTop}>
-        <View style={styles.headerGlass}>
-          <Text style={styles.title}>Welcome, {user?.displayName?.split(' ')[0] || "Traveler"}</Text>
-          <Text style={styles.tokens}>Balance: <Text style={{fontFamily: Typography.bodyBold}}>{user?.tokens} 🍃</Text></Text>
-        </View>
-        <TouchableOpacity style={styles.logoutBtn} onPress={() => signOut(auth)}>
-          <Text style={styles.logoutText}>Leave</Text>
-        </TouchableOpacity>
-      </View>
-      
-      <TouchableOpacity style={styles.fabFilters} onPress={() => {}}>
-        <Text style={styles.fabText}>⚙ Filters</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity style={styles.fabCreate} onPress={() => navigation.navigate('Wizard')}>
-        <Text style={styles.fabCreateText}>+ Host Event</Text>
-      </TouchableOpacity>
-
-      <EventModal 
-        event={selectedEvent} 
-        onClose={() => setSelectedEvent(null)} 
-        onJoin={handleJoin}
-        currentUserId={user?.uid}
-        isJoining={isJoining}
-      />
+      {renderHUD()}
+      {mode === 'wizard_details' && renderWizardDetails()}
+      {mode === 'wizard_location' && renderWizardLocation()}
+      {mode === 'event_chat' && renderEventChat()}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
-  overlayTop: { position: 'absolute', top: 35, left: 20, right: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  headerGlass: { backgroundColor: Colors.glassBg, padding: 18, borderRadius: 24, borderWidth: 1, borderColor: Colors.glassBorder, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 20, elevation: 12 },
-  title: { fontFamily: Typography.heading, fontSize: 22, color: Colors.text, marginBottom: 4 },
-  tokens: { fontFamily: Typography.body, fontSize: 15, color: Colors.primary },
-  logoutBtn: { backgroundColor: 'rgba(255,255,255,0.95)', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 24, borderWidth: 1, borderColor: '#EBEBEB', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10 },
-  logoutText: { fontFamily: Typography.bodySemibold, color: Colors.danger, fontSize: 13 },
+  settingsBtn: { position: 'absolute', top: 25, right: 20, backgroundColor: Colors.glassBg, padding: 12, borderRadius: 50, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 10, borderWidth: 1, borderColor: Colors.glassBorder },
   
-  fabFilters: { position: 'absolute', top: 135, right: 20, backgroundColor: Colors.surface, paddingHorizontal: 18, paddingVertical: 14, borderRadius: 24, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 15, elevation: 5 },
-  fabText: { fontFamily: Typography.bodySemibold, color: Colors.text },
+  topLeft: { position: 'absolute', top: 25, left: 20 },
+  balancePill: { backgroundColor: 'rgba(255,255,255,0.9)', paddingHorizontal: 15, paddingVertical: 8, borderRadius: 20, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10, alignSelf: 'flex-start', marginBottom: 12, borderWidth: 1, borderColor: '#eee' },
+  balanceText: { fontFamily: Typography.bodyBold, color: Colors.primary, fontSize: 13 },
+  upcomingRow: { flexDirection: 'row', alignItems: 'center' },
+  plusBtn: { width: 50, height: 50, backgroundColor: Colors.primary, borderRadius: 25, justifyContent: 'center', alignItems: 'center', shadowColor: Colors.primaryDark, shadowOpacity: 0.3, shadowRadius: 15, elevation: 5 },
+  plusBtnText: { color: '#fff', fontSize: 26, fontWeight: '300' },
+  upcomingScroll: { marginLeft: 15, paddingRight: 20, maxWidth: 250 },
+  upcomingIcon: { width: 44, height: 44, backgroundColor: Colors.surface, borderRadius: 22, justifyContent: 'center', alignItems: 'center', marginRight: 10, borderWidth: 1, borderColor: '#eee', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 5 },
+  upcomingInitial: { fontFamily: Typography.bodyBold, color: Colors.text, fontSize: 16 },
 
-  fabCreate: { position: 'absolute', bottom: 45, alignSelf: 'center', backgroundColor: Colors.primary, paddingHorizontal: 40, paddingVertical: 22, borderRadius: 40, shadowColor: Colors.primaryDark, shadowOpacity: 0.35, shadowRadius: 20, elevation: 15 },
-  fabCreateText: { fontFamily: Typography.bodyBold, color: '#fff', fontSize: 16, letterSpacing: 1 },
+  bottomBar: { position: 'absolute', bottom: 30, left: 20, right: 20, flexDirection: 'row', alignItems: 'center' },
+  dateScroll: { flex: 1, marginRight: 15 },
+  datePill: { backgroundColor: Colors.glassBg, paddingHorizontal: 18, paddingVertical: 12, borderRadius: 24, marginRight: 10, borderWidth: 1, borderColor: Colors.glassBorder },
+  datePillActive: { backgroundColor: Colors.text, borderColor: Colors.text },
+  datePillText: { fontFamily: Typography.bodySemibold, color: Colors.textLight, fontSize: 14 },
+  datePillTextActive: { color: '#fff' },
+  filterBtn: { backgroundColor: Colors.surface, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 24, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10 },
+  filterBtnText: { fontFamily: Typography.bodyBold, color: Colors.text, fontSize: 14 },
+
+  glassPanelBottom: { position: 'absolute', bottom: 30, left: 20, right: 20, backgroundColor: Colors.surface, padding: 25, borderRadius: 30, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 30, elevation: 15, borderWidth: 1, borderColor: '#eee' },
+  glassPanelBottomFull: { position: 'absolute', bottom: 0, left: 0, right: 0, height: '55%', backgroundColor: Colors.surface, padding: 25, borderTopLeftRadius: 30, borderTopRightRadius: 30, shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 30, elevation: 20 },
+  glassPanelTop: { position: 'absolute', top: 30, left: 20, right: 20, backgroundColor: Colors.text, padding: 25, borderRadius: 24, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 20, elevation: 15 },
+  
+  panelTitle: { fontFamily: Typography.heading, fontSize: 24, color: Colors.text, marginBottom: 20 },
+  panelTitleDark: { fontFamily: Typography.heading, fontSize: 22, color: '#fff', marginBottom: 5 },
+  panelSub: { fontFamily: Typography.body, fontSize: 13, color: '#ccc', marginBottom: 20 },
+  input: { fontFamily: Typography.body, borderWidth: 1, borderColor: '#E8E8E8', backgroundColor: '#FAFAFA', borderRadius: 16, padding: 15, marginBottom: 15, fontSize: 15, color: Colors.text },
+  
+  row: { flexDirection: 'row', gap: 10, justifyContent: 'flex-end' },
+  btnPrimary: { backgroundColor: Colors.primary, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 16 },
+  btnPrimaryFull: { backgroundColor: Colors.primary, paddingVertical: 16, borderRadius: 16, alignItems: 'center', width: '100%', marginTop: 20 },
+  btnPrimaryText: { fontFamily: Typography.bodyBold, color: '#fff', fontSize: 15 },
+  btnSecondary: { backgroundColor: 'transparent', paddingHorizontal: 15, paddingVertical: 12 },
+  btnSecondaryText: { fontFamily: Typography.bodyBold, color: '#999', fontSize: 15 },
+
+  chatHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', borderBottomWidth: 1, borderBottomColor: '#eee', paddingBottom: 15, marginBottom: 15 },
+  chatTitle: { fontFamily: Typography.heading, fontSize: 22, color: Colors.text },
+  chatSub: { fontFamily: Typography.body, fontSize: 12, color: Colors.textLight, marginTop: 4 },
+  closeIcon: { fontSize: 20, color: '#ccc', padding: 5 },
+  
+  chatLocked: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20 },
+  chatLockedIco: { fontSize: 40, marginBottom: 15 },
+  chatLockedTitle: { fontFamily: Typography.heading, fontSize: 24, color: Colors.text, marginBottom: 10 },
+  chatLockedSub: { fontFamily: Typography.body, fontSize: 14, color: Colors.textLight, textAlign: 'center', lineHeight: 20 },
+
+  chatOpen: { flex: 1 },
+  chatScroll: { flex: 1 },
+  chatBubble: { backgroundColor: '#F3F4F2', padding: 15, borderRadius: 20, alignSelf: 'flex-start', borderBottomLeftRadius: 5 },
+  chatText: { fontFamily: Typography.body, color: Colors.text, fontSize: 14 },
+  chatInputRow: { flexDirection: 'row', gap: 10, paddingTop: 15, borderTopWidth: 1, borderTopColor: '#eee' },
+  chatInput: { flex: 1, fontFamily: Typography.body, backgroundColor: '#FAFAFA', borderRadius: 20, paddingHorizontal: 15, borderWidth: 1, borderColor: '#eee' },
 
   pinBase: { borderWidth: 2, borderColor: '#fff' },
   pinPublic: { width: 22, height: 22, borderRadius: 11, backgroundColor: Colors.accent },
   pinPrivate: { width: 90, height: 90, borderRadius: 45, backgroundColor: 'rgba(94, 113, 83, 0.25)', borderWidth: 1, borderColor: Colors.primary },
-  pinExternal: { backgroundColor: '#8B9C82' } 
+  pinDraft: { width: 26, height: 26, borderRadius: 13, backgroundColor: Colors.primary, shadowColor: Colors.primary, shadowOpacity: 0.5, shadowRadius: 10 }
 });

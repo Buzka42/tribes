@@ -2,14 +2,13 @@ import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import MapScreen from '../screens/MapScreen';
-import WizardScreen from '../screens/WizardScreen';
 import LoginScreen from '../screens/LoginScreen';
 import { useAuth } from '../hooks/useAuth';
 import { ActivityIndicator, View } from 'react-native';
+import { Colors } from '../theme';
 
 export type RootStackParamList = {
   Map: undefined;
-  Wizard: undefined;
   Login: undefined;
 };
 
@@ -20,34 +19,19 @@ export default function AppNavigator() {
 
   if (loading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color="#d4af37" />
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.background }}>
+        <ActivityIndicator size="large" color={Colors.primary} />
       </View>
     );
   }
 
   return (
     <NavigationContainer>
-      <Stack.Navigator>
+      <Stack.Navigator screenOptions={{ headerShown: false, animation: 'fade' }}>
         {(!user && !firebaseUser) ? (
-          <Stack.Screen 
-            name="Login" 
-            component={LoginScreen} 
-            options={{ headerShown: false }}
-          />
+          <Stack.Screen name="Login" component={LoginScreen} />
         ) : (
-          <>
-            <Stack.Screen 
-              name="Map" 
-              component={MapScreen} 
-              options={{ headerShown: false }}
-            />
-            <Stack.Screen 
-              name="Wizard" 
-              component={WizardScreen} 
-              options={{ presentation: 'modal', title: 'Create Event' }}
-            />
-          </>
+          <Stack.Screen name="Map" component={MapScreen} />
         )}
       </Stack.Navigator>
     </NavigationContainer>

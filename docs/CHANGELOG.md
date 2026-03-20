@@ -1,5 +1,7 @@
 # Changelog
 
+- refactor: Eradicated decoupled screens natively via rewriting UI flow into cutting-edge Map-centric Single Page Architecture (SPA) implementing bottom sheets, dynamic overlays, glassmorphism, and instant on-map pin selection logic
+- feat: Integrated "Event Tribal Chat" unlocking sequence mapping strictly to Firebase transaction states securing user token bounds
 - feat: Unleashed complete "Earthy Organic Premium" visual overhaul across all screens incorporating Playfair Display and Inter Google Fonts
 - feat: Implemented EventModal Card featuring glassmorphic attributes allowing attendees to deduct 1 🍃 to Join Events seamlessly
 - chore: Refactored base styles globally via `src/theme/index.ts` adopting deep sage greens, delicate oatmeal, and transparent modal borders

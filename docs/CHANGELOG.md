@@ -1,5 +1,6 @@
 # Changelog
 
+- fix: Resolved Web blank screen crash by isolating Mapbox completely out of the web tree using `MapScreen.web.tsx`
 - feat: Added web mockup for Mapbox to support local browser testing without Android Studio
 - chore: added eas.json configuration to allow for EAS cloud builds and prevent local compilation issues
 - fix: installed `expo-system-ui` to resolve Android warning during build

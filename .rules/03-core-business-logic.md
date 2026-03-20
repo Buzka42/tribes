@@ -1,0 +1,4 @@
+- Rule 1 - Token System: Users spend tokens to create/join events (anti-flaking mechanism). Tokens are refunded based on a post-event like/dislike quick survey.
+- Rule 2 - Event Privacy: Public events show exact pins. Private events show only a ~500m radius circle on the map. Exact address is revealed only to accepted participants.
+- Rule 3 - Event Creation: 3-step wizard (1. Interest/Title/Limit, 2. Mapbox Location/Time/Privacy toggle, 3. Token Cost Summary).
+- Rule 4 - Map UI: Bottom slider for date range filtering. Top right icon for interest/category filters (set during onboarding).

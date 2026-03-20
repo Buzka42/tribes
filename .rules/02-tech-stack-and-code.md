@@ -1,0 +1,5 @@
+- Rule 1: Use React Native with Expo (managed workflow).
+- Rule 2: Use TypeScript strictly. No `any` types. All Firebase responses and components must have interfaces.
+- Rule 3: Use Firebase (Firestore for DB, Firebase Auth for users, Cloud Functions for backend logic).
+- Rule 4: Use Mapbox for the map interface.
+- Rule 5: Keep components small. Separate business logic into custom hooks (e.g., `useTokens.ts`, `useEvents.ts`).

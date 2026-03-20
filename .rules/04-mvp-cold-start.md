@@ -1,0 +1,3 @@
+- Rule 1: To populate the map initially, we will have external events pulled via a daily Firebase Cloud Function.
+- Rule 2: This function will use the Gemini API with Google Search Tool to find public Facebook events, format them as JSON, and save them to Firestore.
+- Rule 3: External events have a different pin color, cost 0 tokens to join, and redirect to the external URL.

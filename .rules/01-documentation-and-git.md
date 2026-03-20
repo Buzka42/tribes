@@ -1,0 +1,5 @@
+- Rule 1: The `/docs` folder is your source of truth. It must contain `ARCHITECTURE.md`, `DATABASE.md`, and `CHANGELOG.md`.
+- Rule 2: BEFORE writing or modifying any app code, you must explain your plan.
+- Rule 3: AFTER writing code, but BEFORE making a git commit, you must update `CHANGELOG.md` with your changes.
+- Rule 4: Every git commit must use Conventional Commits (e.g., feat:, fix:, docs:) and match the changelog.
+- Rule 5: Push all changes to the main repository at https://github.com/Buzka42/tribes.

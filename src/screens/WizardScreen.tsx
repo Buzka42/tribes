@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Button, TextInput, Switch, Platform } from 'react-native';
+import { View, Text, StyleSheet, Button, TextInput, Switch, Platform, Alert } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
+import { useEvents } from '../hooks/useEvents';
 
 type WizardScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Wizard'>;
 interface Props { navigation: WizardScreenNavigationProp; }
@@ -12,6 +13,23 @@ export default function WizardScreen({ navigation }: Props) {
   const [interest, setInterest] = useState('');
   const [limit, setLimit] = useState('10');
   const [isPrivate, setIsPrivate] = useState(false);
+  const { createEvent } = useEvents();
+
+  const handleCreateEvent = async () => {
+    try {
+      if (!title || !interest) {
+        Alert.alert("Missing Fields", "Please provide title and interest.");
+        return;
+      }
+      await createEvent(title, interest, parseInt(limit) || 10, isPrivate, 5, {
+        latitude: 50.2649, // Katowice mock
+        longitude: 19.0238
+      });
+      navigation.goBack();
+    } catch (e) {
+      console.log('Error in wizard', e);
+    }
+  };
 
   const renderStep1 = () => (
     <View style={styles.stepContainer}>
@@ -59,7 +77,7 @@ export default function WizardScreen({ navigation }: Props) {
       </View>
       <View style={styles.buttonRow}>
         <Button title="Back" onPress={() => setStep(2)} color="gray" />
-        <Button title="Create Tribes Event!" onPress={() => navigation.goBack()} color="#2089dc" />
+        <Button title="Create Tribes Event!" onPress={handleCreateEvent} color="#d4af37" />
       </View>
     </View>
   );

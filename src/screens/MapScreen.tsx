@@ -1,12 +1,14 @@
-import React from 'react';
-import { View, StyleSheet, Text, Button } from 'react-native';
+import React, { useState } from 'react';
+import { View, StyleSheet, Text, TouchableOpacity, Alert } from 'react-native';
 import Mapbox from '@rnmapbox/maps';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { useAuth } from '../hooks/useAuth';
-import { useEvents } from '../hooks/useEvents';
+import { useEvents, TribeVent } from '../hooks/useEvents';
 import { auth } from '../config/firebase';
 import { signOut } from 'firebase/auth';
+import EventModal from '../components/EventModal';
+import { Colors, Typography } from '../theme';
 
 type MapScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Map'>;
 interface Props { navigation: MapScreenNavigationProp; }
@@ -15,18 +17,38 @@ Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_KEY || '');
 
 export default function MapScreen({ navigation }: Props) {
   const { user } = useAuth();
-  const { events } = useEvents();
+  const { events, joinEvent } = useEvents();
+  const [selectedEvent, setSelectedEvent] = useState<TribeVent | null>(null);
+  const [isJoining, setIsJoining] = useState(false);
+
+  const handleJoin = async (eventId: string) => {
+    setIsJoining(true);
+    try {
+      if ((user?.tokens || 0) < 1) {
+        Alert.alert("Out of Leaves", "You need at least 1 🍃 to join.");
+        return;
+      }
+      await joinEvent(eventId);
+      Alert.alert("Joined!", "You are now officially part of this tribe's event.");
+      setSelectedEvent(null);
+    } catch (error: any) {
+      Alert.alert("Error", error.message);
+    } finally {
+      setIsJoining(false);
+    }
+  };
 
   return (
     <View style={styles.container}>
       <Mapbox.MapView style={styles.map} logoEnabled={false} attributionEnabled={false}>
-        <Mapbox.Camera zoomLevel={12} centerCoordinate={[19.0238, 50.2649]} />
+        <Mapbox.Camera zoomLevel={13} centerCoordinate={[19.0238, 50.2649]} />
         
         {events.map(event => (
           <Mapbox.PointAnnotation
             key={event.id}
             id={event.id}
             coordinate={[event.location.longitude, event.location.latitude]}
+            onSelected={() => setSelectedEvent(event)}
           >
             <View style={[
               styles.pinBase, 
@@ -37,38 +59,53 @@ export default function MapScreen({ navigation }: Props) {
         ))}
       </Mapbox.MapView>
 
-      <View style={styles.overlay}>
-        <Text style={styles.title}>Hey, {user?.displayName}</Text>
-        <Text style={styles.tokens}>Balance: {user?.tokens} 🪙</Text>
-        <View style={styles.buttonRow}>
-          <Button title="Create Event" onPress={() => navigation.navigate('Wizard')} />
-          <Button title="Logout" onPress={() => signOut(auth)} color="red" />
+      <View style={styles.overlayTop}>
+        <View style={styles.headerGlass}>
+          <Text style={styles.title}>Welcome, {user?.displayName?.split(' ')[0] || "Traveler"}</Text>
+          <Text style={styles.tokens}>Balance: <Text style={{fontFamily: Typography.bodyBold}}>{user?.tokens} 🍃</Text></Text>
         </View>
+        <TouchableOpacity style={styles.logoutBtn} onPress={() => signOut(auth)}>
+          <Text style={styles.logoutText}>Leave</Text>
+        </TouchableOpacity>
       </View>
 
-      <View style={styles.filterIcon}>
-        <Button title="⚙ Filters" onPress={() => {}} />
-      </View>
+      <TouchableOpacity style={styles.fabFilters} onPress={() => {}}>
+        <Text style={styles.fabText}>⚙ Filters</Text>
+      </TouchableOpacity>
 
-      <View style={styles.bottomSlider}>
-        <Text style={styles.sliderText}>Date Range Slider (Mock UI)</Text>
-      </View>
+      <TouchableOpacity style={styles.fabCreate} onPress={() => navigation.navigate('Wizard')}>
+        <Text style={styles.fabCreateText}>+ Host Event</Text>
+      </TouchableOpacity>
+
+      <EventModal 
+        event={selectedEvent} 
+        onClose={() => setSelectedEvent(null)} 
+        onJoin={handleJoin}
+        currentUserId={user?.uid}
+        isJoining={isJoining}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: { flex: 1, backgroundColor: Colors.background },
   map: { flex: 1 },
-  overlay: { position: 'absolute', top: 50, left: 20, backgroundColor: 'white', padding: 15, borderRadius: 10, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 10, elevation: 5 },
-  title: { fontSize: 18, fontWeight: 'bold', marginBottom: 5, textAlign: 'center' },
-  tokens: { fontSize: 16, color: '#d4af37', fontWeight: 'bold', textAlign: 'center', marginBottom: 15 },
-  buttonRow: { flexDirection: 'row', gap: 10 },
-  filterIcon: { position: 'absolute', top: 50, right: 20 },
-  bottomSlider: { position: 'absolute', bottom: 40, left: 20, right: 20, backgroundColor: 'white', padding: 15, borderRadius: 20, opacity: 0.95, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 10, elevation: 10 },
-  sliderText: { textAlign: 'center', fontSize: 14, fontWeight: 'bold' },
-  pinBase: { borderWidth: 2, borderColor: 'white' },
-  pinPublic: { width: 24, height: 24, borderRadius: 12, backgroundColor: '#e74c3c' },
-  pinPrivate: { width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(52, 152, 219, 0.4)', borderWidth: 1, borderColor: '#3498db' },
-  pinExternal: { backgroundColor: '#9b59b6' } // Rule 4: external events have different color
+  overlayTop: { position: 'absolute', top: 55, left: 20, right: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  headerGlass: { backgroundColor: Colors.glassBg, padding: 18, borderRadius: 24, borderWidth: 1, borderColor: Colors.glassBorder, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 20, elevation: 10 },
+  title: { fontFamily: Typography.heading, fontSize: 18, color: Colors.text, marginBottom: 2 },
+  tokens: { fontFamily: Typography.body, fontSize: 14, color: Colors.primary },
+  logoutBtn: { backgroundColor: 'rgba(255,255,255,0.95)', paddingHorizontal: 15, paddingVertical: 12, borderRadius: 20, borderWidth: 1, borderColor: '#eee' },
+  logoutText: { fontFamily: Typography.bodySemibold, color: Colors.danger, fontSize: 12 },
+  
+  fabFilters: { position: 'absolute', top: 140, right: 20, backgroundColor: Colors.surface, paddingHorizontal: 15, paddingVertical: 12, borderRadius: 20, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 10, elevation: 5 },
+  fabText: { fontFamily: Typography.bodySemibold, color: Colors.text },
+
+  fabCreate: { position: 'absolute', bottom: 50, alignSelf: 'center', backgroundColor: Colors.primary, paddingHorizontal: 35, paddingVertical: 20, borderRadius: 40, shadowColor: Colors.primaryDark, shadowOpacity: 0.35, shadowRadius: 15, elevation: 12, borderWidth: 2, borderColor: 'rgba(255,255,255,0.1)' },
+  fabCreateText: { fontFamily: Typography.bodyBold, color: '#fff', fontSize: 16, letterSpacing: 0.8 },
+
+  pinBase: { borderWidth: 2, borderColor: '#fff' },
+  pinPublic: { width: 22, height: 22, borderRadius: 11, backgroundColor: Colors.accent },
+  pinPrivate: { width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(94, 113, 83, 0.25)', borderWidth: 1, borderColor: Colors.primary },
+  pinExternal: { backgroundColor: '#8B9C82' } 
 });

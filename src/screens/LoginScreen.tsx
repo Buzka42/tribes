@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Platform, KeyboardAvoidingView } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Platform, KeyboardAvoidingView, Image } from 'react-native';
 import { auth } from '../config/firebase';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { Colors, Typography } from '../theme';
@@ -59,7 +59,7 @@ export default function LoginScreen() {
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.container}>
       <View style={styles.card}>
-        <Text style={styles.title}>Tribes 🍃</Text>
+        <Text style={styles.title}>Tribes <Image source={require('../assets/leaf.png')} style={{width: 34, height: 34, resizeMode: 'contain'}} /></Text>
         <Text style={styles.subtitle}>{isLogin ? 'Log in to reconnect with your tribe.' : 'Join a vibrant outdoor community.'}</Text>
         
         {errorMsg ? (

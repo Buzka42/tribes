@@ -17,12 +17,15 @@
 - `id` (string)
 - `creatorId` (string) - Reference to users collection
 - `title` (string)
-- `interest` (string)
+- `interest` (string) - legacy fallback
+- `categoryId` (string) - Master Group filter (e.g. 'sports')
+- `categorySub` (string) - Selectable sub-group string
 - `location` (Geopoint / Address data)
   - `latitude` (number)
   - `longitude` (number)
   - `address` (string)
 - `time` (timestamp)
+- `participants` (array of strings) - user UIDs
 - `isPrivate` (boolean)
 - `participantLimit` (number)
 - `tokenCost` (number)

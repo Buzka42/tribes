@@ -39,7 +39,7 @@ export default function SettingsScreen() {
     if (!user || !displayName.trim() || !locationName.trim() || !locationCoords) return;
     setLoading(true);
     try {
-      await updateDoc(doc(db, 'users', user.id), {
+      await updateDoc(doc(db, 'users', user.uid), {
         displayName: displayName.trim(),
         locationName: locationName,
         homeLocation: {

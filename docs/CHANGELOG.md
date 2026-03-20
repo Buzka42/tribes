@@ -1,5 +1,9 @@
 # Changelog
 
+- feat: Implemented structured Category rendering engine mapping dynamic icons and interface colors
+- feat: Allowed organizers to delete events via EventChat unlocking 5 🍃 refund to host and 1 🍃 to attendees
+- feat: Enabled dynamic Category Sub-group inheritance of parent-color active states in Creation Wizard
+- feat: Implemented Map modal multi-filter system matching active events against 'categoryId' logic
 - feat: Implemented Mapbox Geocoding Autocomplete for dynamic event location entry mapping native camera FlyTo bounds
 - feat: Engineered SettingsScreen with profile modification logic linking to Firestore `locationName` and `homeLocation`
 - fix: Resolved async Alert execution bugs over React Native Web missing polyfills utilizing window closures

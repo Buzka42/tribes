@@ -13,16 +13,18 @@ import { signOut } from 'firebase/auth';
 import { Colors, Typography } from '../theme';
 import { format } from 'date-fns';
 import { Feather } from '@expo/vector-icons';
+import { EVENT_CATEGORIES, CategoryGroupId } from '../data/categories';
 
 Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_KEY || '');
 
 export default function MapScreen() {
   const { user } = useAuth();
-  const { events, joinEvent, createEvent } = useEvents();
+  const { events, joinEvent, createEvent, deleteEvent } = useEvents();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   
-  const [mode, setMode] = useState<'map' | 'wizard_details' | 'wizard_location' | 'event_chat'>('map');
-  const [draft, setDraft] = useState({ title: '', interest: '', isPrivate: false, limit: '10', location: null as any, address: '' });
+  const [mode, setMode] = useState<'map' | 'wizard_details' | 'wizard_location' | 'event_chat' | 'filters'>('map');
+  const [draft, setDraft] = useState({ title: '', categoryId: '' as CategoryGroupId | '', categorySub: '', isPrivate: false, limit: '10', location: null as any, address: '' });
+  const [activeFilters, setActiveFilters] = useState<CategoryGroupId[]>([]);
   const [selectedEvent, setSelectedEvent] = useState<TribeVent | null>(null);
   const [dateFilter, setDateFilter] = useState('30 Days');
   const [tutStep, setTutStep] = useState(0);
@@ -49,7 +51,9 @@ export default function MapScreen() {
   const dummyEvent: any = {
     id: 'tutorial-dummy',
     title: 'Sunset Hike 🌄',
-    interest: 'Outdoor',
+    interest: 'Hiking',
+    categoryId: 'outdoor',
+    categorySub: 'Hiking',
     description: 'A simulation event to learn how joining works. Your Leaves will be instantly refunded since this is a test!',
     location: { 
       latitude: (user?.homeLocation?.latitude || 50.2649) + 0.003, 
@@ -62,7 +66,11 @@ export default function MapScreen() {
     maxParticipants: 10
   };
 
-  const displayEvents = tutStep === 4 ? [...events, dummyEvent] : events;
+  let displayFilterEvents = tutStep === 4 ? [...events, dummyEvent] : events;
+  if (activeFilters.length > 0) {
+    displayFilterEvents = displayFilterEvents.filter(e => e.categoryId && activeFilters.includes(e.categoryId as CategoryGroupId));
+  }
+  const displayEvents = displayFilterEvents;
   const joinedEvents = events.filter(e => e.participants?.includes(user?.uid || ''));
 
   const handleScroll = (event: any) => {
@@ -85,14 +93,14 @@ export default function MapScreen() {
 
   const handleCreate = async () => {
     try {
-      if (!draft.title || !draft.interest || !draft.location) return Alert.alert("Incomplete", "Make sure title, category, and location are set.");
-      await createEvent(draft.title, draft.interest, parseInt(draft.limit) || 10, draft.isPrivate, 5, {
+      if (!draft.title || !draft.categoryId || !draft.categorySub || !draft.location) return Alert.alert("Incomplete", "Make sure title, category, subcategory and location are set.");
+      await createEvent(draft.title, draft.categoryId, draft.categorySub, parseInt(draft.limit) || 10, draft.isPrivate, 5, {
         latitude: draft.location.lat,
         longitude: draft.location.lng,
         address: draft.address || "Pinned carefully on Map"
       });
       setMode('map');
-      setDraft({ title: '', interest: '', isPrivate: false, limit: '10', location: null, address: '' });
+      setDraft({ title: '', categoryId: '', categorySub: '', isPrivate: false, limit: '10', location: null, address: '' });
       Alert.alert("Tribe Assembled", "Your event is live. 5 Leaves were locked.");
     } catch(err: any) { Alert.alert("Error", err.message); }
   };
@@ -198,7 +206,7 @@ export default function MapScreen() {
            <Text style={styles.devBtnText}>[CLR]</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.devBtn} onPress={() => {
-           setDraft({...draft, title: "Dev Dummy Event", interest: "Testing", location: {lat: 50.2649, lng: 19.0238}});
+           setDraft({...draft, title: "Dev Dummy Event", categoryId: 'outdoor', categorySub: "Testing", location: {lat: 50.2649, lng: 19.0238}});
            setMode('wizard_location');
         }}>
            <Text style={styles.devBtnText}>[PIN]</Text>
@@ -214,6 +222,20 @@ export default function MapScreen() {
         <TouchableOpacity style={styles.settingsBtn} onPress={() => navigation.navigate('Settings')}>
           <BlurView intensity={65} tint="light" style={styles.iconWrapper}>
             <Text style={{fontSize: 16}}>⚙️</Text>
+          </BlurView>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.locateBtn} onPress={() => {
+          if (user?.homeLocation) {
+             cameraRef.current?.setCamera({
+               centerCoordinate: [user.homeLocation.longitude, user.homeLocation.latitude],
+               zoomLevel: 12.5,
+               animationDuration: 1000
+             });
+          }
+        }}>
+          <BlurView intensity={65} tint="light" style={styles.iconWrapper}>
+            <Feather name="navigation" size={18} color={Colors.text} />
           </BlurView>
         </TouchableOpacity>
 
@@ -266,9 +288,9 @@ export default function MapScreen() {
             )}
           </BlurView>
 
-          <TouchableOpacity style={styles.filterBtn}>
-            <BlurView intensity={75} tint="light" style={styles.filterBtnWrapper}>
-               <Text style={styles.filterBtnText}>Filters ☰</Text>
+          <TouchableOpacity style={styles.filterBtn} onPress={() => setMode('filters')}>
+            <BlurView intensity={70} tint="light" style={[styles.filterBtnWrapper, activeFilters.length > 0 && {backgroundColor: Colors.primary, borderColor: Colors.primary}]}>
+              <Text style={[styles.filterBtnText, activeFilters.length > 0 && {color: '#fff'}]}>Filters {activeFilters.length > 0 ? `(${activeFilters.length})` : '☰'}</Text>
             </BlurView>
           </TouchableOpacity>
         </View>
@@ -281,8 +303,28 @@ export default function MapScreen() {
       <BlurView intensity={85} tint="light" style={styles.glassPanelBottom}>
         <Text style={styles.panelTitle}>Design your tribe's event</Text>
         <TextInput style={styles.input} placeholder="Title (e.g. Morning Run)" placeholderTextColor="#999" value={draft.title} onChangeText={(t) => setDraft({...draft, title: t})} />
-        <TextInput style={styles.input} placeholder="Category (e.g. Sports)" placeholderTextColor="#999" value={draft.interest} onChangeText={(t) => setDraft({...draft, interest: t})} />
         
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{marginBottom: draft.categoryId ? 10 : 20}}>
+          {EVENT_CATEGORIES.map(cat => (
+             <TouchableOpacity key={cat.id} style={[styles.wizardCat, draft.categoryId === cat.id && {backgroundColor: cat.color, borderColor: cat.color}]} onPress={() => setDraft({...draft, categoryId: cat.id as CategoryGroupId, categorySub: ''})}>
+               <Feather name={cat.icon} size={14} color={draft.categoryId === cat.id ? '#fff' : Colors.text} />
+               <Text style={[styles.wizardCatText, draft.categoryId === cat.id && {color: '#fff'}]}>{cat.label}</Text>
+             </TouchableOpacity>
+          ))}
+        </ScrollView>
+        {draft.categoryId ? (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{marginBottom: 20}}>
+             {EVENT_CATEGORIES.find(c => c.id === draft.categoryId)?.subgroups.map(sub => {
+                const catColor = EVENT_CATEGORIES.find(ce => ce.id === draft.categoryId)?.color || Colors.primary;
+                return (
+                  <TouchableOpacity key={sub} style={[styles.wizardSubCat, draft.categorySub === sub && {backgroundColor: catColor}]} onPress={() => setDraft({...draft, categorySub: sub})}>
+                    <Text style={[styles.wizardSubCatText, draft.categorySub === sub && {color: '#fff'}]}>{sub}</Text>
+                  </TouchableOpacity>
+                );
+             })}
+          </ScrollView>
+        ) : null}
+
         <TextInput style={styles.input} placeholder="Location Base (City/Street)" placeholderTextColor="#999" value={wizardQuery} onChangeText={searchWizardLocation} />
         {wizardSuggestions.length > 0 && (
           <View style={styles.suggestionsContainer}>
@@ -337,6 +379,35 @@ export default function MapScreen() {
                 <Text style={styles.chatTitle} numberOfLines={1}>{selectedEvent.title}</Text>
                 <Text style={styles.chatSub}>{selectedEvent.participants.length} / {selectedEvent.participantLimit} Attending • {selectedEvent.time ? format(new Date(selectedEvent.time), 'MMM d, h:mm a') : 'TBD'}</Text>
              </View>
+             {isHost && (
+               <TouchableOpacity onPress={async () => {
+                 if (selectedEvent.id === 'tutorial-dummy') {
+                   setSelectedEvent(null); setMode('map'); return;
+                 }
+                 if (Platform.OS === 'web') {
+                   if (window.confirm('Are you sure you want to cancel this event?')) {
+                     try {
+                       await deleteEvent(selectedEvent.id);
+                       setSelectedEvent(null); setMode('map');
+                       window.alert('The event was removed and 5 leaves have been refunded.');
+                     } catch (e: any) { window.alert('Error: ' + e.message); }
+                   }
+                 } else {
+                   Alert.alert('Delete Event', 'Are you sure you want to cancel this event?', [
+                     { text: 'No' },
+                     { text: 'Yes, Cancel', style: 'destructive', onPress: async () => {
+                         try {
+                           await deleteEvent(selectedEvent.id);
+                           setSelectedEvent(null); setMode('map');
+                           Alert.alert('Event Deleted', 'The event was removed and 5 leaves have been refunded.');
+                         } catch (e: any) { Alert.alert('Error', e.message); }
+                     }}
+                   ]);
+                 }
+               }} style={{padding: 8, marginRight: 5}}>
+                 <Feather name="trash-2" size={18} color="rgba(200, 50, 50, 0.8)" />
+               </TouchableOpacity>
+             )}
              <TouchableOpacity onPress={() => { setSelectedEvent(null); setMode('map'); }}><Text style={styles.closeIcon}>✖</Text></TouchableOpacity>
           </View>
           
@@ -365,6 +436,38 @@ export default function MapScreen() {
     );
   };
 
+  const renderFilters = () => (
+    <View style={styles.glassWrapperBottomFull}>
+      <BlurView intensity={90} tint="light" style={styles.glassPanelBottomFull}>
+        <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 5}}>
+          <Text style={styles.panelTitle}>Filter Events</Text>
+          <TouchableOpacity onPress={() => setMode('map')} style={{padding: 5}}><Feather name="x" size={24} color={Colors.text} /></TouchableOpacity>
+        </View>
+        <Text style={{fontFamily: Typography.body, color: Colors.textLight, marginBottom: 15}}>Select categories to show on map. Deselect all to view everything.</Text>
+        <ScrollView contentContainerStyle={{paddingBottom: 40}}>
+          <View style={styles.filterGrid}>
+            {EVENT_CATEGORIES.map(cat => {
+              const isActive = activeFilters.includes(cat.id);
+              return (
+                <TouchableOpacity 
+                   key={cat.id} 
+                   style={[styles.filterCard, isActive && [styles.filterCardActive, {backgroundColor: cat.color, borderColor: cat.color}]]}
+                   onPress={() => {
+                     if (isActive) setActiveFilters(prev => prev.filter(p => p !== cat.id));
+                     else setActiveFilters(prev => [...prev, cat.id]);
+                   }}
+                >
+                   <Feather name={cat.icon} size={20} color={isActive ? '#fff' : cat.color} />
+                   <Text style={[styles.filterCardText, isActive ? {color: '#fff'} : {color: Colors.text}]}>{cat.label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </ScrollView>
+      </BlurView>
+    </View>
+  );
+
   return (
     <View style={styles.container}>
       <Mapbox.MapView style={styles.map} logoEnabled={false} attributionEnabled={false} onPress={handleMapPress}>
@@ -386,7 +489,11 @@ export default function MapScreen() {
               styles.pinBase, 
               ev.isPrivate ? styles.pinPrivate : styles.pinPublic,
               ev.isExternal && styles.pinExternal
-            ]} />
+            ]}>
+               {ev.categoryId && (
+                 <Feather name={EVENT_CATEGORIES.find(c => c.id === ev.categoryId)?.icon as any || "map-pin"} size={16} color="#fff" />
+               )}
+            </View>
           </Mapbox.PointAnnotation>
         ))}
 
@@ -405,6 +512,7 @@ export default function MapScreen() {
       {mode === 'wizard_details' && renderWizardDetails()}
       {mode === 'wizard_location' && renderWizardLocation()}
       {mode === 'event_chat' && renderEventChat()}
+      {mode === 'filters' && renderFilters()}
       {renderTutorial()}
     </View>
   );
@@ -415,6 +523,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   map: { flex: 1 },
   settingsBtn: { position: 'absolute', top: 50, right: 20 },
+  locateBtn: { position: 'absolute', top: 110, right: 20 },
   iconWrapper: { padding: 12, borderRadius: 25, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' },
   inlineIcon: { width: 17, height: 17, resizeMode: 'contain', marginHorizontal: 2, transform: [{ translateY: 3 }] },
 
@@ -446,7 +555,18 @@ const styles = StyleSheet.create({
   filterBtnWrapper: { paddingHorizontal: 18, paddingVertical: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.5)' },
   filterBtnText: { fontFamily: Typography.bodyBold, color: Colors.text, fontSize: 13 },
 
-  glassWrapperBottom: { position: 'absolute', bottom: 50, left: 20, right: 20, borderRadius: 30, overflow: 'hidden' },
+  wizardCat: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: '#ddd', marginRight: 8, backgroundColor: '#fff' },
+  wizardCatText: { fontFamily: Typography.bodyBold, fontSize: 13, color: Colors.text, marginLeft: 6 },
+  wizardSubCat: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.5)', marginRight: 8 },
+  wizardSubCatActive: { backgroundColor: 'rgba(255,255,255,0.95)', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 5 },
+  wizardSubCatText: { fontFamily: Typography.bodySemibold, fontSize: 13, color: Colors.text },
+  
+  filterGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 15 },
+  filterCard: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderRadius: 16, borderWidth: 1, borderColor: '#eee', backgroundColor: 'rgba(255,255,255,0.8)', width: '48%' },
+  filterCardActive: { shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 10, elevation: 5 },
+  filterCardText: { fontFamily: Typography.bodyBold, fontSize: 14, marginLeft: 8 },
+
+  glassWrapperBottom: { position: 'absolute', bottom: 35, left: 20, right: 20, borderRadius: 30, overflow: 'hidden', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 25 },
   glassWrapperBottomFull: { position: 'absolute', bottom: 0, left: 0, right: 0, height: '60%', borderTopLeftRadius: 36, borderTopRightRadius: 36, overflow: 'hidden' },
   glassWrapperTop: { position: 'absolute', top: 50, left: 20, right: 20, borderRadius: 24, overflow: 'hidden' },
   
@@ -488,8 +608,8 @@ const styles = StyleSheet.create({
   chatInputRow: { flexDirection: 'row', gap: 10, paddingTop: 15, borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.05)' },
   chatInput: { flex: 1, fontFamily: Typography.body, backgroundColor: 'rgba(255,255,255,0.8)', borderRadius: 20, paddingHorizontal: 20, borderWidth: 1, borderColor: '#eee' },
 
-  pinBase: { borderWidth: 2, borderColor: '#fff' },
-  pinPublic: { width: 20, height: 20, borderRadius: 10, backgroundColor: Colors.accent },
+  pinBase: { width: 34, height: 34, borderRadius: 17, backgroundColor: Colors.primary, borderWidth: 2, borderColor: '#fff', justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 5 },
+  pinPublic: { backgroundColor: Colors.accent },
   pinPrivate: { width: 90, height: 90, borderRadius: 45, backgroundColor: 'rgba(94, 113, 83, 0.25)', borderWidth: 1, borderColor: Colors.primary },
   pinDraft: { width: 24, height: 24, borderRadius: 12, backgroundColor: Colors.primary, elevation: 10, borderWidth: 3, borderColor: '#fff' },
   pinExternal: { backgroundColor: '#8B9C82' } 

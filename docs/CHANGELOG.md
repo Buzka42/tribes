@@ -1,5 +1,6 @@
 # Changelog
 
+- feat: Overhauled Wizard Step 2 with full-screen interactive Map UI and implemented Mapbox Geocoding Places API for direct address-to-pin Search capabilities
 - feat: Segregated dynamic Map Location Pinning interfaces to `src/components/MapPicker` rendering functional native/web variants
 - feat: Refactored `WizardScreen` Step 2 eliminating Text stubs with precise dynamic geographical click coordinate fetching logic and UI Validation
 - fix: Updated `react-map-gl` core imports to target v8 `/mapbox` specific path due to root exports deprecation, preventing Web Map crashes

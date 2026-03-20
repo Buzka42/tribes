@@ -23,7 +23,16 @@ export default function MapScreen() {
   const [dateFilter, setDateFilter] = useState('30 Days');
   const [tutStep, setTutStep] = useState(0);
 
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(true);
+
   const joinedEvents = events.filter(e => e.participants?.includes(user?.uid || ''));
+
+  const handleScroll = (event: any) => {
+    const { contentOffset, layoutMeasurement, contentSize } = event.nativeEvent;
+    setCanScrollLeft(contentOffset.x > 5);
+    setCanScrollRight(contentOffset.x + layoutMeasurement.width < contentSize.width - 5);
+  };
 
   React.useEffect(() => {
     if (user?.tokens === 10 && joinedEvents.length === 0) setTutStep(1);
@@ -176,14 +185,28 @@ export default function MapScreen() {
 
         <View style={styles.bottomBar} pointerEvents="box-none">
           <BlurView intensity={65} tint="light" style={styles.dateSliderContainer}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{paddingRight: 20}}>
-              {['Today', 'Tomorrow', 'Weekend', 'Next Week', '30 Days', 'All'].map(d => (
+            {canScrollLeft && (
+              <View style={styles.scrollIndicatorLeft} pointerEvents="none">
+                <Feather name="chevron-left" size={16} color={Colors.primaryDark} />
+              </View>
+            )}
+            <ScrollView 
+               horizontal showsHorizontalScrollIndicator={false} 
+               contentContainerStyle={{paddingHorizontal: 12}}
+               onScroll={handleScroll}
+               scrollEventThrottle={16}
+            >
+              {['30 Days', 'Today', 'Tomorrow', 'Weekend', 'Next Week', 'All'].map(d => (
                 <TouchableOpacity key={d} onPress={() => setDateFilter(d)} style={[styles.datePill, dateFilter === d && styles.datePillActive]}>
                   <Text style={[styles.datePillText, dateFilter === d && styles.datePillTextActive]}>{d}</Text>
                 </TouchableOpacity>
               ))}
             </ScrollView>
-            <View style={styles.fadeRight} />
+            {canScrollRight && (
+              <View style={styles.scrollIndicatorRight} pointerEvents="none">
+                <Feather name="chevron-right" size={16} color={Colors.primaryDark} />
+              </View>
+            )}
           </BlurView>
 
           <TouchableOpacity style={styles.filterBtn}>
@@ -335,12 +358,13 @@ const styles = StyleSheet.create({
   upcomingInitial: { fontFamily: Typography.bodyBold, color: Colors.text, fontSize: 15 },
 
   bottomBar: { position: 'absolute', bottom: 50, left: 20, right: 20, flexDirection: 'row', alignItems: 'center' },
-  dateSliderContainer: { flex: 1, marginRight: 15, borderRadius: 24, paddingVertical: 6, paddingHorizontal: 6, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.5)', flexDirection: 'row' },
+  dateSliderContainer: { flex: 1, marginRight: 15, borderRadius: 24, paddingVertical: 4, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.5)', flexDirection: 'row', alignItems: 'center' },
+  scrollIndicatorLeft: { position: 'absolute', left: 4, zIndex: 10, backgroundColor: 'rgba(255,255,255,0.9)', padding: 4, borderRadius: 12, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 3, elevation: 3 },
+  scrollIndicatorRight: { position: 'absolute', right: 4, zIndex: 10, backgroundColor: 'rgba(255,255,255,0.9)', padding: 4, borderRadius: 12, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 3, elevation: 3 },
   datePill: { backgroundColor: 'transparent', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 18, marginRight: 6 },
   datePillActive: { backgroundColor: 'rgba(255,255,255,0.95)' },
   datePillText: { fontFamily: Typography.bodySemibold, color: Colors.textLight, fontSize: 13 },
   datePillTextActive: { color: Colors.text },
-  fadeRight: { position: 'absolute', right: 0, top: 0, bottom: 0, width: 30, backgroundColor: 'transparent' },
 
   filterBtn: { borderRadius: 24, overflow: 'hidden' },
   filterBtnWrapper: { paddingHorizontal: 18, paddingVertical: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.5)' },

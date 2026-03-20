@@ -325,8 +325,8 @@ const styles = StyleSheet.create({
   devBtnText: { fontFamily: Typography.bodyBold, color: 'rgba(200, 50, 50, 1)', fontSize: 11, textAlign: 'center' },
   
   topLeft: { position: 'absolute', top: 50, left: 20 },
-  balancePill: { overflow: 'hidden', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, marginBottom: 15, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)', flexDirection: 'row', alignItems: 'center' },
-  balanceText: { fontFamily: Typography.bodyBold, color: Colors.primaryDark, fontSize: 13, letterSpacing: 0.5 },
+  balancePill: { overflow: 'hidden', width: 54, height: 54, borderRadius: 27, marginBottom: 15, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)', justifyContent: 'center', alignItems: 'center' },
+  balanceText: { fontFamily: Typography.bodyBold, color: Colors.primaryDark, fontSize: 13, textAlign: 'center' },
   
   upcomingRow: { flexDirection: 'row', alignItems: 'center' },
   plusBtn: { width: 54, height: 54, backgroundColor: Colors.primary, borderRadius: 27, justifyContent: 'center', alignItems: 'center', shadowColor: Colors.primaryDark, shadowOpacity: 0.4, shadowRadius: 10, shadowOffset: { width: 0, height: 5 }, elevation: 6 },

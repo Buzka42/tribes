@@ -75,46 +75,40 @@ export default function MapScreen() {
     if (tutStep === 0) return null;
     return (
       <View style={[StyleSheet.absoluteFill, { zIndex: 9999, elevation: 9999 }]} pointerEvents="box-none">
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(23, 31, 20, 0.7)' }]} />
-        
         {tutStep === 1 && (
-          <View style={{position: 'absolute', top: 110, left: 20, backgroundColor: Colors.surface, padding: 25, borderRadius: 24, width: '80%', maxWidth: 350, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 20}}>
-            <Text style={{fontFamily: Typography.heading, fontSize: 24, marginBottom: 8}}>1. The Leaves <Image source={require('../assets/leaf.png')} style={styles.inlineIcon} /></Text>
-            <Text style={{fontFamily: Typography.body, fontSize: 14, color: Colors.text, lineHeight: 22, marginVertical: 10}}>This is your balance. You use leaves to host or join events. They keep the tribe accountable and prevent flaking!</Text>
-            <TouchableOpacity style={styles.btnPrimary} onPress={() => setTutStep(2)}><Text style={styles.btnPrimaryText}>Next</Text></TouchableOpacity>
+          <View style={{position: 'absolute', top: 55, left: 140, backgroundColor: Colors.surface, padding: 15, borderRadius: 16, width: 240, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 15, elevation: 10, shadowOffset: {width:0, height:5}}}>
+            <Text style={{fontFamily: Typography.bodyBold, color: Colors.text, fontSize: 13, lineHeight: 20}}>
+              <Feather name="arrow-left" color={Colors.primary} size={14} /> Your Leaves. They keep the tribe accountable and prevent flaking!
+            </Text>
+            <TouchableOpacity onPress={() => setTutStep(2)} style={{marginTop: 10, alignSelf: 'flex-end'}}><Text style={{color: Colors.primary, fontFamily: Typography.bodyBold}}>Next ›</Text></TouchableOpacity>
           </View>
         )}
         
         {tutStep === 2 && (
-          <View style={{position: 'absolute', top: 180, left: 20, backgroundColor: Colors.surface, padding: 25, borderRadius: 24, width: '80%', maxWidth: 350, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 20}}>
-            <Text style={{fontFamily: Typography.heading, fontSize: 24, marginBottom: 8}}>2. Assemble</Text>
-            <Text style={{fontFamily: Typography.body, fontSize: 14, color: Colors.text, lineHeight: 22, marginVertical: 10}}>Use this Green button to host. It locks 5 <Image source={require('../assets/leaf.png')} style={styles.inlineIcon} /> to host an event, 80% refunded automatically upon completion.</Text>
-            <TouchableOpacity style={styles.btnPrimary} onPress={() => setTutStep(3)}><Text style={styles.btnPrimaryText}>Next</Text></TouchableOpacity>
+          <View style={{position: 'absolute', top: 120, left: 85, backgroundColor: Colors.surface, padding: 15, borderRadius: 16, width: 240, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 15, elevation: 10, shadowOffset: {width:0, height:5}}}>
+            <Text style={{fontFamily: Typography.bodyBold, color: Colors.text, fontSize: 13, lineHeight: 20}}>
+              <Feather name="arrow-left" color={Colors.primary} size={14} /> The Origin. Lock 5 Leaves to host an event. 80% is returned upon completion.
+            </Text>
+            <TouchableOpacity onPress={() => setTutStep(3)} style={{marginTop: 10, alignSelf: 'flex-end'}}><Text style={{color: Colors.primary, fontFamily: Typography.bodyBold}}>Next ›</Text></TouchableOpacity>
           </View>
         )}
 
         {tutStep === 3 && (
-          <View style={{position: 'absolute', bottom: 120, left: 20, backgroundColor: Colors.surface, padding: 25, borderRadius: 24, width: '80%', maxWidth: 350, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 20}}>
-            <Text style={{fontFamily: Typography.heading, fontSize: 24, marginBottom: 8}}>3. Map Filters</Text>
-            <Text style={{fontFamily: Typography.body, fontSize: 14, color: Colors.text, lineHeight: 22, marginVertical: 10}}>Slide through these dates or hit Filters to drill down to your perfect adventure.</Text>
-            <TouchableOpacity style={styles.btnPrimary} onPress={() => setTutStep(4)}><Text style={styles.btnPrimaryText}>Next</Text></TouchableOpacity>
+          <View style={{position: 'absolute', bottom: 105, left: 20, backgroundColor: Colors.surface, padding: 15, borderRadius: 16, width: 240, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 15, elevation: 10, shadowOffset: {width:0, height:5}}}>
+            <Text style={{fontFamily: Typography.bodyBold, color: Colors.text, fontSize: 13, lineHeight: 20}}>
+              Slide through dates or hit Filters to drill down to your perfect tech or outdoor adventure. <Feather name="arrow-down" color={Colors.primary} size={14} />
+            </Text>
+            <TouchableOpacity onPress={() => setTutStep(4)} style={{marginTop: 10, alignSelf: 'flex-end'}}><Text style={{color: Colors.primary, fontFamily: Typography.bodyBold}}>Next ›</Text></TouchableOpacity>
           </View>
         )}
 
         {tutStep === 4 && (
-          <View style={{flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20}}>
-            <View style={{backgroundColor: Colors.surface, padding: 35, borderRadius: 24, width: '100%', maxWidth: 400, alignItems: 'center'}}>
-              <Text style={{fontFamily: Typography.heading, fontSize: 28, marginBottom: 10}}>Simulation Phase</Text>
-              <Text style={{fontFamily: Typography.body, textAlign: 'center', marginBottom: 20, color: Colors.text, lineHeight: 22}}>Let's pretend a "Sunset Hike" just spawned on the map. Joining it will deduct 1 <Image source={require('../assets/leaf.png')} style={styles.inlineIcon} />.</Text>
-              <View style={{borderWidth: 1, borderColor: '#eee', padding: 20, borderRadius: 16, width: '100%', marginBottom: 25, backgroundColor: '#FAFAFA'}}>
-                 <Text style={{fontFamily: Typography.heading, fontSize: 22}}>Sunset Hike 🌄</Text>
-                 <Text style={{fontFamily: Typography.bodyBold, color: Colors.primary, marginTop: 5}}>2 / 10 Attending</Text>
-                 <Text style={{fontFamily: Typography.body, color: Colors.textLight, marginTop: 10, lineHeight: 20}}>If you flake, the token is burned 🔥. If you show up, the token is instantly fully refunded!</Text>
-              </View>
-              <TouchableOpacity style={styles.btnPrimaryFull} onPress={() => { setTutStep(0); Alert.alert('Welcome!', 'You are now ready to use The Tribes.');}}>
-                 <Text style={styles.btnPrimaryText}>Got it! Let's start!</Text>
-              </TouchableOpacity>
-            </View>
+          <View style={{position: 'absolute', top: '50%', left: '50%', transform: [{translateX: -160}, {translateY: -100}], backgroundColor: Colors.surface, padding: 25, borderRadius: 24, width: 320, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 15, elevation: 10, shadowOffset: {width:0, height:5}}}>
+            <Text style={{fontFamily: Typography.heading, fontSize: 22, color: Colors.text, marginBottom: 8}}>Simulation Phase</Text>
+            <Text style={{fontFamily: Typography.body, color: Colors.text, fontSize: 14, lineHeight: 22, marginBottom: 15}}>Let's pretend a "Sunset Hike" just spawned on the map. Joining it will deduct 1 <Image source={require('../assets/leaf.png')} style={styles.inlineIcon} />. If you flake, the token is burned 🔥. If you show up, the token is instantly fully refunded!</Text>
+            <TouchableOpacity style={styles.btnPrimaryFull} onPress={() => { setTutStep(0); Alert.alert('Welcome!', 'The map is yours.');}}>
+               <Text style={styles.btnPrimaryText}>Got it! Let's start!</Text>
+            </TouchableOpacity>
           </View>
         )}
       </View>
@@ -127,28 +121,27 @@ export default function MapScreen() {
       <View style={styles.devPanel}>
         <Text style={styles.devTitle}>DEV TOOLS</Text>
         <TouchableOpacity style={styles.devBtn} onPress={() => setTutStep(1)}>
-           <Text style={styles.devBtnText}>[Trigger Onboarding]</Text>
+           <Text style={styles.devBtnText}>[TUT]</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.devBtn} onPress={async () => {
           const { doc, updateDoc, increment } = await import('firebase/firestore');
           await updateDoc(doc(db, 'users', user.uid), { tokens: increment(100) });
         }}>
-           <Text style={styles.devBtnText}>[+100 Leaves]</Text>
+           <Text style={styles.devBtnText}>[+100 🍃]</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.devBtn} onPress={async () => {
           const { collection, query, where, getDocs, deleteDoc } = await import('firebase/firestore');
           const q = query(collection(db, 'events'), where('creatorId', '==', user.uid));
           const snaps = await getDocs(q);
           snaps.forEach(s => deleteDoc(s.ref));
-          Alert.alert("Purged", `Deleted ${snaps.size} test events.`);
         }}>
-           <Text style={styles.devBtnText}>[Purge My Events]</Text>
+           <Text style={styles.devBtnText}>[CLR]</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.devBtn} onPress={() => {
            setDraft({...draft, title: "Dev Dummy Event", interest: "Testing", location: {lat: 50.2649, lng: 19.0238}});
            setMode('wizard_location');
         }}>
-           <Text style={styles.devBtnText}>[Spawn Draft Event]</Text>
+           <Text style={styles.devBtnText}>[PIN]</Text>
         </TouchableOpacity>
       </View>
     );
@@ -334,10 +327,10 @@ const styles = StyleSheet.create({
   iconWrapper: { padding: 12, borderRadius: 25, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 10 },
   inlineIcon: { width: 17, height: 17, resizeMode: 'contain', marginHorizontal: 2, transform: [{ translateY: 3 }] },
   
-  devPanel: { position: 'absolute', top: 110, right: 20, backgroundColor: 'rgba(200, 50, 50, 0.85)', padding: 18, borderRadius: 16, zIndex: 1000, elevation: 1000, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 15 },
-  devTitle: { fontFamily: Typography.heading, color: '#fff', fontSize: 13, marginBottom: 12, textAlign: 'center', letterSpacing: 2 },
-  devBtn: { backgroundColor: '#fff', paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10, marginBottom: 8, elevation: 5 },
-  devBtnText: { fontFamily: Typography.bodyBold, color: 'rgba(200, 50, 50, 1)', fontSize: 11, textAlign: 'center' },
+  devPanel: { position: 'absolute', right: 10, top: '50%', transform: [{ translateY: -100 }], backgroundColor: 'rgba(200, 50, 50, 0.85)', padding: 12, borderRadius: 12, zIndex: 1000, elevation: 1000, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 10 },
+  devTitle: { fontFamily: Typography.heading, color: '#fff', fontSize: 10, marginBottom: 6, textAlign: 'center', letterSpacing: 1 },
+  devBtn: { backgroundColor: '#fff', paddingHorizontal: 6, paddingVertical: 6, borderRadius: 8, marginBottom: 5, elevation: 2 },
+  devBtnText: { fontFamily: Typography.bodyBold, color: 'rgba(200, 50, 50, 1)', fontSize: 9, textAlign: 'center' },
 
   topLeft: { position: 'absolute', top: 35, left: 20 },
   balancePill: { overflow: 'hidden', width: 54, height: 54, borderRadius: 27, marginBottom: 15, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)', justifyContent: 'center', alignItems: 'center' },

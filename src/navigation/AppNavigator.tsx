@@ -3,6 +3,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import MapScreen from '../screens/MapScreen';
 import LoginScreen from '../screens/LoginScreen';
+import SetupProfileScreen from '../screens/SetupProfileScreen';
 import { useAuth } from '../hooks/useAuth';
 import { ActivityIndicator, View } from 'react-native';
 import { Colors } from '../theme';
@@ -10,6 +11,7 @@ import { Colors } from '../theme';
 export type RootStackParamList = {
   Map: undefined;
   Login: undefined;
+  SetupProfile: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -30,6 +32,8 @@ export default function AppNavigator() {
       <Stack.Navigator screenOptions={{ headerShown: false, animation: 'fade' }}>
         {(!user && !firebaseUser) ? (
           <Stack.Screen name="Login" component={LoginScreen} />
+        ) : !user?.locationName ? (
+          <Stack.Screen name="SetupProfile" component={SetupProfileScreen} />
         ) : (
           <Stack.Screen name="Map" component={MapScreen} />
         )}

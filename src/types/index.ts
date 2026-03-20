@@ -7,6 +7,8 @@ export interface LocationData {
 export interface User {
   uid: string;
   displayName: string;
+  locationName?: string;
+  homeLocation?: LocationData;
   interests: string[];
   tokens: number;
   createdAt: Date;

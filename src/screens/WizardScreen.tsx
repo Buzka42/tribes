@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Button, TextInput, Switch, Platform, Alert } fr
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { useEvents } from '../hooks/useEvents';
+import MapPicker from '../components/MapPicker';
 
 type WizardScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Wizard'>;
 interface Props { navigation: WizardScreenNavigationProp; }
@@ -13,6 +14,8 @@ export default function WizardScreen({ navigation }: Props) {
   const [interest, setInterest] = useState('');
   const [limit, setLimit] = useState('10');
   const [isPrivate, setIsPrivate] = useState(false);
+  const [location, setLocation] = useState<{lat: number, lng: number} | null>(null);
+  
   const { createEvent } = useEvents();
 
   const handleCreateEvent = async () => {
@@ -21,9 +24,14 @@ export default function WizardScreen({ navigation }: Props) {
         Alert.alert("Missing Fields", "Please provide title and interest.");
         return;
       }
+      if (!location) {
+        Alert.alert("Missing Location", "Please tap on the Map to set an exact location for the event.");
+        return;
+      }
       await createEvent(title, interest, parseInt(limit) || 10, isPrivate, 5, {
-        latitude: 50.2649, // Katowice mock
-        longitude: 19.0238
+        latitude: location.lat,
+        longitude: location.lng,
+        address: "Pinned from map wizard"
       });
       navigation.goBack();
     } catch (e) {
@@ -46,9 +54,9 @@ export default function WizardScreen({ navigation }: Props) {
   const renderStep2 = () => (
     <View style={styles.stepContainer}>
       <Text style={styles.heading}>2. Location, Time & Privacy</Text>
-      <View style={styles.mapMock}>
-        <Text style={styles.mockText}>{Platform.OS === 'web' ? '[ Web Map Picker Fallback ]' : '[ Native Map Picker ]'}</Text>
-        <Text style={styles.mockSub}>Drag pin to exact location</Text>
+      <View style={{ marginBottom: 20 }}>
+        <MapPicker onLocationPick={(lat, lng) => setLocation({lat, lng})} />
+        {location && <Text style={{ marginTop: 8, color: '#444' }}>Selected: {location.lat.toFixed(4)}, {location.lng.toFixed(4)}</Text>}
       </View>
       <View style={styles.row}>
         <View>
@@ -99,9 +107,6 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, padding: 15, backgroundColor: '#fff', borderRadius: 10, borderWidth: 1, borderColor: '#eee' },
   rowTitle: { fontSize: 16, fontWeight: '600', color: '#333' },
   rowDesc: { fontSize: 12, color: '#666', marginTop: 4 },
-  mapMock: { height: 180, backgroundColor: '#e9e9e9', justifyContent: 'center', alignItems: 'center', marginBottom: 20, borderRadius: 10, borderWidth: 1, borderColor: '#ccc', borderStyle: 'dashed' },
-  mockText: { fontSize: 16, fontWeight: '600', color: '#555' },
-  mockSub: { fontSize: 12, color: '#888', marginTop: 5 },
   buttonRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 },
   buttonRowSingle: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 10 },
   summaryCard: { backgroundColor: '#fff', padding: 20, borderRadius: 12, borderWidth: 1, borderColor: '#eee', marginBottom: 25, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10, elevation: 2 },

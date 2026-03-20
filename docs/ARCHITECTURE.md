@@ -17,3 +17,4 @@
 - **Event Wizard**: 3-step process (Details -> Map/Time/Privacy -> Cost Summary).
 - **Token System**: Core mechanism limiting event joining/creation to deter flaking, with a refund mechanism.
 - **Privacy Model**: Public vs Private map representations.
+- **Settings & Profiling**: `SettingsScreen` enables dynamic modifications of display name and automatic base location mapping via Mapbox API search.

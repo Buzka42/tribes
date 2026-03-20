@@ -5,6 +5,10 @@
 ### 1. `users`
 - `uid` (string) - Firebase Auth UID
 - `displayName` (string)
+- `locationName` (string)
+- `homeLocation` (object)
+  - `latitude` (number)
+  - `longitude` (number)
 - `interests` (array of strings)
 - `tokens` (number)
 - `createdAt` (timestamp)

@@ -1,5 +1,10 @@
 # Changelog
 
+- feat: Implemented Mapbox Geocoding Autocomplete for dynamic event location entry mapping native camera FlyTo bounds
+- feat: Engineered SettingsScreen with profile modification logic linking to Firestore `locationName` and `homeLocation`
+- fix: Resolved async Alert execution bugs over React Native Web missing polyfills utilizing window closures
+- chore: Realigned tooltips over the interface ensuring pixel-perfect spatial geometry around the UI elements
+- fix: Addressed invalid Date formatting metrics over Unix parsers breaking dummy-events rendering on the Map
 - refactor: Eradicated decoupled screens natively via rewriting UI flow into cutting-edge Map-centric Single Page Architecture (SPA) implementing bottom sheets, dynamic overlays, glassmorphism, and instant on-map pin selection logic
 - feat: Integrated "Event Tribal Chat" unlocking sequence mapping strictly to Firebase transaction states securing user token bounds
 - feat: Unleashed complete "Earthy Organic Premium" visual overhaul across all screens incorporating Playfair Display and Inter Google Fonts

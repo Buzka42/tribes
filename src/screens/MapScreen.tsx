@@ -100,9 +100,22 @@ export default function MapScreen() {
   const handleJoin = async () => {
     if (!selectedEvent || !user) return;
     if (selectedEvent.id === 'tutorial-dummy') {
-      Alert.alert('Congratulations! 🌟', 'You successfully joined your first event! Since this is a test simulation, your 1 Leaf 🍃 has been instantly refunded. Welcome to The Tribes!');
-      setMode('map');
-      setTutStep(0);
+      if (Platform.OS === 'web') {
+        window.alert('Congratulations! 🌟\n\nYou successfully joined your first event! Since this is a test simulation, your 1 Leaf 🍃 has been instantly refunded. Welcome to The Tribes!');
+        setSelectedEvent(null);
+        setMode('map');
+        setTutStep(0);
+      } else {
+        Alert.alert(
+          'Congratulations! 🌟', 
+          'You successfully joined your first event! Since this is a test simulation, your 1 Leaf 🍃 has been instantly refunded. Welcome to The Tribes!',
+          [{ text: 'Awesome!', onPress: () => {
+            setSelectedEvent(null);
+            setMode('map');
+            setTutStep(0);
+          }}]
+        );
+      }
       return;
     }
     if (user.tokens < 1) {
@@ -130,8 +143,8 @@ export default function MapScreen() {
         )}
         
         {tutStep === 2 && (
-          <View style={{position: 'absolute', top: 110, left: 85, backgroundColor: Colors.surface, padding: 15, borderRadius: 16, width: 240, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 15, elevation: 10}}>
-            <Feather name="arrow-left" color={Colors.primary} size={26} style={{position: 'absolute', top: 14, left: -20}} />
+          <View style={{position: 'absolute', top: 104, left: 95, backgroundColor: Colors.surface, padding: 15, borderRadius: 16, width: 240, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 15, elevation: 10}}>
+            <Feather name="arrow-left" color={Colors.primary} size={26} style={{position: 'absolute', top: 14, left: -24}} />
             <Text style={{fontFamily: Typography.bodyBold, color: Colors.text, fontSize: 13, lineHeight: 20}}>
               The Origin. Lock 5 Leaves to host an event. 80% is returned upon completion.
             </Text>

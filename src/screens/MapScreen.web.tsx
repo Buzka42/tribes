@@ -8,7 +8,7 @@ import { auth } from '../config/firebase';
 import { signOut } from 'firebase/auth';
 
 // True Mapbox Web SDK implementation specifically mapped to MapScreen.web.tsx
-import Map, { Marker } from 'react-map-gl';
+import Map, { Marker } from 'react-map-gl/mapbox';
 import 'mapbox-gl/dist/mapbox-gl.css';
 
 type MapScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Map'>;

@@ -9,6 +9,7 @@ import { auth, db } from '../config/firebase';
 import { signOut } from 'firebase/auth';
 import { Colors, Typography } from '../theme';
 import { format } from 'date-fns';
+import { Feather } from '@expo/vector-icons';
 
 Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_KEY || '');
 
@@ -158,7 +159,7 @@ export default function MapScreen() {
           
           <View style={styles.upcomingRow}>
             <TouchableOpacity style={styles.plusBtn} onPress={() => setMode('wizard_details')}>
-              <Image source={require('../assets/plus.png')} style={styles.plusIcon} />
+              <Feather name="plus" size={28} color="#fff" />
             </TouchableOpacity>
             
             {joinedEvents.length > 0 && (
@@ -328,8 +329,7 @@ const styles = StyleSheet.create({
   balanceText: { fontFamily: Typography.bodyBold, color: Colors.primaryDark, fontSize: 13, letterSpacing: 0.5 },
   
   upcomingRow: { flexDirection: 'row', alignItems: 'center' },
-  plusBtn: { width: 50, height: 50, justifyContent: 'center', alignItems: 'center', shadowColor: Colors.primaryDark, shadowOpacity: 0.4, shadowRadius: 10, shadowOffset: { width: 0, height: 5 }, elevation: 5 },
-  plusIcon: { width: '100%', height: '100%', resizeMode: 'contain' },
+  plusBtn: { width: 54, height: 54, backgroundColor: Colors.primary, borderRadius: 27, justifyContent: 'center', alignItems: 'center', shadowColor: Colors.primaryDark, shadowOpacity: 0.4, shadowRadius: 10, shadowOffset: { width: 0, height: 5 }, elevation: 6 },
   upcomingScroll: { marginLeft: 12, maxWidth: 220 },
   upcomingIcon: { width: 40, height: 40, backgroundColor: 'rgba(255,255,255,0.85)', borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginRight: 10, borderWidth: 1, borderColor: '#eee' },
   upcomingInitial: { fontFamily: Typography.bodyBold, color: Colors.text, fontSize: 15 },

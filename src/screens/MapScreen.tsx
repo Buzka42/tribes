@@ -10,6 +10,8 @@ interface Props {
   navigation: MapScreenNavigationProp;
 }
 
+Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_KEY || '');
+
 export default function MapScreen({ navigation }: Props) {
   return (
     <View style={styles.container}>

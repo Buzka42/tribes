@@ -1,5 +1,6 @@
 # Changelog
 
+- feat: Implemented interactive 3-step Event Wizard with conditional rendering, state management, and UI logic
 - fix: Resolved Web blank screen crash by isolating Mapbox completely out of the web tree using `MapScreen.web.tsx`
 - feat: Added web mockup for Mapbox to support local browser testing without Android Studio
 - chore: added eas.json configuration to allow for EAS cloud builds and prevent local compilation issues

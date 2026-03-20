@@ -1,5 +1,8 @@
 # Changelog
 
+- feat: Added web mockup for Mapbox to support local browser testing without Android Studio
+- chore: added eas.json configuration to allow for EAS cloud builds and prevent local compilation issues
+- fix: installed `expo-system-ui` to resolve Android warning during build
 - fix: Refactored Mapbox to use environment variable for access token to prevent hardcoding secrets
 - feat: Added AppNavigator, MapScreen with Mapbox integration, and WizardScreen skeleton for first test
 - feat: Defined TypeScript entity interfaces in `src/types/index.ts`

@@ -1,5 +1,6 @@
 # Changelog
 
+- fix: Created custom `metro.config.js` adjusting the bundler `unstable_enablePackageExports` rule to resolve `react-map-gl` resolution on Web
 - feat: Integrated interactive `react-map-gl` standard Mapbox module over the placeholder web proxy map to render real maps on PC browsers for robust testing without simulators
 - feat: Developed Firebase Cloud Functions background task leveraging `@google/genai` to automatically harvest Facebook events via Google Search Grounding
 - feat: Added Google Auth popup integration to LoginScreen alongside email provider

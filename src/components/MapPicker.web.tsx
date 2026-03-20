@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, StyleSheet } from 'react-native';
-import Map, { Marker, MapLayerMouseEvent } from 'react-map-gl/mapbox';
+import Map, { Marker, MapMouseEvent } from 'react-map-gl/mapbox';
 
 interface Props {
   onLocationPick: (lat: number, lng: number) => void;
@@ -9,7 +9,7 @@ interface Props {
 export default function MapPicker({ onLocationPick }: Props) {
   const [marker, setMarker] = useState<{lat: number, lng: number} | null>(null);
 
-  const handleMapClick = (e: MapLayerMouseEvent) => {
+  const handleMapClick = (e: MapMouseEvent) => {
     const lng = e.lngLat.lng;
     const lat = e.lngLat.lat;
     setMarker({ lat, lng });

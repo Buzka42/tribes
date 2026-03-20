@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, Button, StyleSheet, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, TextInput, Button, StyleSheet, ActivityIndicator, Alert, Platform } from 'react-native';
 import { auth } from '../config/firebase';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -28,6 +28,22 @@ export default function LoginScreen() {
     }
   };
 
+  const handleGoogleAuth = async () => {
+    setLoading(true);
+    try {
+      if (Platform.OS === 'web') {
+        const provider = new GoogleAuthProvider();
+        await signInWithPopup(auth, provider);
+      } else {
+        Alert.alert("Google Sign-In", "Native integration pending specific App Client IDs.");
+      }
+    } catch (error: any) {
+      Alert.alert("Google Auth Failed", error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Tribes ⛺</Text>
@@ -41,14 +57,19 @@ export default function LoginScreen() {
       ) : (
         <View style={styles.buttonContainer}>
           <Button title={isLogin ? "Sign In" : "Sign Up"} onPress={handleAuth} color="#333" />
+          <View style={{ marginTop: 15 }}>
+            <Button title="Continue with Google" onPress={handleGoogleAuth} color="#DB4437" />
+          </View>
         </View>
       )}
       
-      <Button 
-        title={isLogin ? "Need an account? Sign Up" : "Already have an account? Sign In"} 
-        onPress={() => setIsLogin(!isLogin)} 
-        color="gray" 
-      />
+      <View style={{ marginTop: 15 }}>
+        <Button 
+          title={isLogin ? "Need an account? Sign Up" : "Already have an account? Sign In"} 
+          onPress={() => setIsLogin(!isLogin)} 
+          color="gray" 
+        />
+      </View>
     </View>
   );
 }

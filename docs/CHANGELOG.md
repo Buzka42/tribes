@@ -1,6 +1,10 @@
 # Changelog
 
-- feat: Implemented comprehensive Firebase Auth loop including `LoginScreen`, Context state management (`useAuth`), and dynamic navigation routing
+- feat: Developed Firebase Cloud Functions background task leveraging `@google/genai` to automatically harvest Facebook events via Google Search Grounding
+- feat: Added Google Auth popup integration to LoginScreen alongside email provider
+- feat: Enabled realtime rendering of Firestore Events on both native Mapbox and web placeholder
+- feat: Implemented privacy radii vs exact pin logic for Map markers
+- feat: Scaffolded Date Range and Interest filters on Map UI
 - feat: Connected `WizardScreen` tightly to Firestore via `useEvents` for realtime database creations and Token manipulation
 - fix: Resolved persistence typings on `config/firebase.ts` for safe SDK execution
 - feat: Implemented interactive 3-step Event Wizard with conditional rendering, state management, and UI logic

@@ -22,6 +22,11 @@ export default function MapScreen() {
   const [draft, setDraft] = useState({ title: '', interest: '', isPrivate: false, limit: '10', location: null as any, address: '' });
   const [selectedEvent, setSelectedEvent] = useState<TribeVent | null>(null);
   const [dateFilter, setDateFilter] = useState('30 Days');
+  const [tutStep, setTutStep] = useState(0);
+
+  React.useEffect(() => {
+    if (user?.tokens === 10 && events.length === 0) setTutStep(1);
+  }, [user?.tokens, events.length]);
 
   const joinedEvents = events.filter(e => e.participants?.includes(user?.uid || ''));
 
@@ -55,6 +60,56 @@ export default function MapScreen() {
   }
 
   // --- COMPONENT RENDERS ---
+
+  const renderTutorial = () => {
+    if (tutStep === 0) return null;
+    return (
+      <View style={[StyleSheet.absoluteFill, { zIndex: 9999, elevation: 9999 }]} pointerEvents="box-none">
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(23, 31, 20, 0.7)' }]} />
+        
+        {tutStep === 1 && (
+          <View style={{position: 'absolute', top: 110, left: 20, backgroundColor: Colors.surface, padding: 25, borderRadius: 24, width: '80%', maxWidth: 350, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 20}}>
+            <Text style={{fontFamily: Typography.heading, fontSize: 24, marginBottom: 8}}>1. The Leaves 🍃</Text>
+            <Text style={{fontFamily: Typography.body, fontSize: 14, color: Colors.text, lineHeight: 22, marginVertical: 10}}>This is your balance. You use leaves to host or join events. They keep the tribe accountable and prevent flaking!</Text>
+            <TouchableOpacity style={styles.btnPrimary} onPress={() => setTutStep(2)}><Text style={styles.btnPrimaryText}>Next</Text></TouchableOpacity>
+          </View>
+        )}
+        
+        {tutStep === 2 && (
+          <View style={{position: 'absolute', top: 180, left: 20, backgroundColor: Colors.surface, padding: 25, borderRadius: 24, width: '80%', maxWidth: 350, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 20}}>
+            <Text style={{fontFamily: Typography.heading, fontSize: 24, marginBottom: 8}}>2. Assemble</Text>
+            <Text style={{fontFamily: Typography.body, fontSize: 14, color: Colors.text, lineHeight: 22, marginVertical: 10}}>Use this Green Plus button to host. It costs 5 🍃 to host an event, 80% refunded automatically upon completion.</Text>
+            <TouchableOpacity style={styles.btnPrimary} onPress={() => setTutStep(3)}><Text style={styles.btnPrimaryText}>Next</Text></TouchableOpacity>
+          </View>
+        )}
+
+        {tutStep === 3 && (
+          <View style={{position: 'absolute', bottom: 120, left: 20, backgroundColor: Colors.surface, padding: 25, borderRadius: 24, width: '80%', maxWidth: 350, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 20}}>
+            <Text style={{fontFamily: Typography.heading, fontSize: 24, marginBottom: 8}}>3. Map Filters</Text>
+            <Text style={{fontFamily: Typography.body, fontSize: 14, color: Colors.text, lineHeight: 22, marginVertical: 10}}>Slide through these dates or hit Filters to drill down to your perfect outdoor, tech or social adventure.</Text>
+            <TouchableOpacity style={styles.btnPrimary} onPress={() => setTutStep(4)}><Text style={styles.btnPrimaryText}>Next</Text></TouchableOpacity>
+          </View>
+        )}
+
+        {tutStep === 4 && (
+          <View style={{flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20}}>
+            <View style={{backgroundColor: Colors.surface, padding: 35, borderRadius: 24, width: '100%', maxWidth: 400, alignItems: 'center'}}>
+              <Text style={{fontFamily: Typography.heading, fontSize: 28, marginBottom: 10}}>Simulation Phase</Text>
+              <Text style={{fontFamily: Typography.body, textAlign: 'center', marginBottom: 20, color: Colors.text, lineHeight: 22}}>Let's pretend a "Sunset Hike" just spawned on the map. Joining it will deduct 1 🍃.</Text>
+              <View style={{borderWidth: 1, borderColor: '#eee', padding: 20, borderRadius: 16, width: '100%', marginBottom: 25, backgroundColor: '#FAFAFA'}}>
+                 <Text style={{fontFamily: Typography.heading, fontSize: 22}}>Sunset Hike 🌄</Text>
+                 <Text style={{fontFamily: Typography.bodyBold, color: Colors.primary, marginTop: 5}}>2 / 10 Attending</Text>
+                 <Text style={{fontFamily: Typography.body, color: Colors.textLight, marginTop: 10, lineHeight: 20}}>If you flake, the token is burned 🔥. If you show up, the token is instantly fully refunded!</Text>
+              </View>
+              <TouchableOpacity style={styles.btnPrimaryFull} onPress={() => { setTutStep(0); Alert.alert('Welcome!', 'You are now ready to use The Tribes.');}}>
+                 <Text style={styles.btnPrimaryText}>Got it! Let's start!</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+      </View>
+    );
+  };
 
   const renderHUD = () => {
     if (mode !== 'map') return null;
@@ -213,6 +268,7 @@ export default function MapScreen() {
       {mode === 'wizard_details' && renderWizardDetails()}
       {mode === 'wizard_location' && renderWizardLocation()}
       {mode === 'event_chat' && renderEventChat()}
+      {renderTutorial()}
     </View>
   );
 }

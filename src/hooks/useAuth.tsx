@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User as FirebaseUser, onAuthStateChanged } from 'firebase/auth';
 import { auth, db } from '../config/firebase';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 import { User } from '../types';
 
 interface AuthContextType {
@@ -18,13 +18,15 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let unsubscribeUser: any = null;
+
     const unsub = onAuthStateChanged(auth, async (fUser) => {
       setFirebaseUser(fUser);
       if (fUser) {
-        // Fetch or create user in Firestore
         const docRef = doc(db, 'users', fUser.uid);
-        try {
-          const snapshot = await getDoc(docRef);
+        
+        // Listen to realtime updates to catch token changes exactly via DB limits
+        unsubscribeUser = onSnapshot(docRef, async (snapshot) => {
           if (snapshot.exists()) {
             setUser(snapshot.data() as User);
           } else {
@@ -33,20 +35,23 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
               displayName: fUser.email?.split('@')[0] || 'User',
               interests: [],
               tokens: 10,
-              createdAt: new Date()
+              createdAt: new Date(),
+              isDev: false
             };
             await setDoc(docRef, newUser);
             setUser(newUser);
           }
-        } catch (error) {
-           console.error("Firestore user sync error:", error);
-        }
+        });
       } else {
+        if (unsubscribeUser) unsubscribeUser();
         setUser(null);
       }
       setLoading(false);
     });
-    return unsub;
+    return () => {
+      unsub();
+      if (unsubscribeUser) unsubscribeUser();
+    };
   }, []);
 
   return <AuthContext.Provider value={{ user, firebaseUser, loading }}>{children}</AuthContext.Provider>;

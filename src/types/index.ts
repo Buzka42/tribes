@@ -10,6 +10,7 @@ export interface User {
   interests: string[];
   tokens: number;
   createdAt: Date;
+  isDev?: boolean;
 }
 
 export interface Event {

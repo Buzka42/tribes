@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, Text, TouchableOpacity, ScrollView, TextInput, Alert } from 'react-native';
+import { View, StyleSheet, Text, TouchableOpacity, ScrollView, TextInput, Alert, Image } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { BlurView } from 'expo-blur';
 import { RootStackParamList } from '../navigation/AppNavigator';
 
 import { useAuth } from '../hooks/useAuth';
 import { useEvents, TribeVent } from '../hooks/useEvents';
-import { auth } from '../config/firebase';
+import { auth, db } from '../config/firebase';
 import { signOut } from 'firebase/auth';
 import { Colors, Typography } from '../theme';
 import { format } from 'date-fns';
@@ -46,14 +46,14 @@ export default function MapScreen() {
       });
       setMode('map');
       setDraft({ title: '', interest: '', isPrivate: false, limit: '10', location: null, address: '' });
-      Alert.alert("Tribe Assembled", "Your event is live. 5 🍃 were locked.");
+      Alert.alert("Tribe Assembled", "Your event is live. 5 Leaves were locked.");
     } catch(err: any) { Alert.alert("Error", err.message); }
   };
 
   const handleJoin = async () => {
     if(!selectedEvent) return;
     try {
-      if ((user?.tokens || 0) < 1) { Alert.alert("Out of Leaves", "You need 1 🍃 to join."); return; }
+      if ((user?.tokens || 0) < 1) { Alert.alert("Out of Leaves", "You need 1 Leaf to join."); return; }
       await joinEvent(selectedEvent.id);
       Alert.alert("Joined", "You've secured your spot. Chat is now unlocked!");
     } catch(e:any) { Alert.alert("Error", e.message); }
@@ -69,7 +69,7 @@ export default function MapScreen() {
         
         {tutStep === 1 && (
           <View style={{position: 'absolute', top: 110, left: 20, backgroundColor: Colors.surface, padding: 25, borderRadius: 24, width: '80%', maxWidth: 350, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 20}}>
-            <Text style={{fontFamily: Typography.heading, fontSize: 24, marginBottom: 8}}>1. The Leaves 🍃</Text>
+            <Text style={{fontFamily: Typography.heading, fontSize: 24, marginBottom: 8}}>1. The Leaves <Image source={require('../assets/leaf.png')} style={styles.inlineIcon} /></Text>
             <Text style={{fontFamily: Typography.body, fontSize: 14, color: Colors.text, lineHeight: 22, marginVertical: 10}}>This is your balance. You use leaves to host or join events. They keep the tribe accountable and prevent flaking!</Text>
             <TouchableOpacity style={styles.btnPrimary} onPress={() => setTutStep(2)}><Text style={styles.btnPrimaryText}>Next</Text></TouchableOpacity>
           </View>
@@ -78,7 +78,7 @@ export default function MapScreen() {
         {tutStep === 2 && (
           <View style={{position: 'absolute', top: 180, left: 20, backgroundColor: Colors.surface, padding: 25, borderRadius: 24, width: '80%', maxWidth: 350, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 20}}>
             <Text style={{fontFamily: Typography.heading, fontSize: 24, marginBottom: 8}}>2. Assemble</Text>
-            <Text style={{fontFamily: Typography.body, fontSize: 14, color: Colors.text, lineHeight: 22, marginVertical: 10}}>Use this Green Plus button to host. It costs 5 🍃 to host an event, 80% refunded automatically upon completion.</Text>
+            <Text style={{fontFamily: Typography.body, fontSize: 14, color: Colors.text, lineHeight: 22, marginVertical: 10}}>Use this Green button to host. It locks 5 <Image source={require('../assets/leaf.png')} style={styles.inlineIcon} /> to host an event, 80% refunded automatically upon completion.</Text>
             <TouchableOpacity style={styles.btnPrimary} onPress={() => setTutStep(3)}><Text style={styles.btnPrimaryText}>Next</Text></TouchableOpacity>
           </View>
         )}
@@ -86,7 +86,7 @@ export default function MapScreen() {
         {tutStep === 3 && (
           <View style={{position: 'absolute', bottom: 120, left: 20, backgroundColor: Colors.surface, padding: 25, borderRadius: 24, width: '80%', maxWidth: 350, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 20}}>
             <Text style={{fontFamily: Typography.heading, fontSize: 24, marginBottom: 8}}>3. Map Filters</Text>
-            <Text style={{fontFamily: Typography.body, fontSize: 14, color: Colors.text, lineHeight: 22, marginVertical: 10}}>Slide through these dates or hit Filters to drill down to your perfect outdoor, tech or social adventure.</Text>
+            <Text style={{fontFamily: Typography.body, fontSize: 14, color: Colors.text, lineHeight: 22, marginVertical: 10}}>Slide through these dates or hit Filters to drill down to your perfect adventure.</Text>
             <TouchableOpacity style={styles.btnPrimary} onPress={() => setTutStep(4)}><Text style={styles.btnPrimaryText}>Next</Text></TouchableOpacity>
           </View>
         )}
@@ -95,7 +95,7 @@ export default function MapScreen() {
           <View style={{flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20}}>
             <View style={{backgroundColor: Colors.surface, padding: 35, borderRadius: 24, width: '100%', maxWidth: 400, alignItems: 'center'}}>
               <Text style={{fontFamily: Typography.heading, fontSize: 28, marginBottom: 10}}>Simulation Phase</Text>
-              <Text style={{fontFamily: Typography.body, textAlign: 'center', marginBottom: 20, color: Colors.text, lineHeight: 22}}>Let's pretend a "Sunset Hike" just spawned on the map. Joining it will deduct 1 🍃.</Text>
+              <Text style={{fontFamily: Typography.body, textAlign: 'center', marginBottom: 20, color: Colors.text, lineHeight: 22}}>Let's pretend a "Sunset Hike" just spawned on the map. Joining it will deduct 1 <Image source={require('../assets/leaf.png')} style={styles.inlineIcon} />.</Text>
               <View style={{borderWidth: 1, borderColor: '#eee', padding: 20, borderRadius: 16, width: '100%', marginBottom: 25, backgroundColor: '#FAFAFA'}}>
                  <Text style={{fontFamily: Typography.heading, fontSize: 22}}>Sunset Hike 🌄</Text>
                  <Text style={{fontFamily: Typography.bodyBold, color: Colors.primary, marginTop: 5}}>2 / 10 Attending</Text>
@@ -111,27 +111,57 @@ export default function MapScreen() {
     );
   };
 
+  const renderDevTools = () => {
+    if (!user?.isDev) return null;
+    return (
+      <View style={styles.devPanel}>
+        <Text style={styles.devTitle}>DEV TOOLS</Text>
+        <TouchableOpacity style={styles.devBtn} onPress={() => setTutStep(1)}>
+           <Text style={styles.devBtnText}>[Trigger Onboarding]</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.devBtn} onPress={async () => {
+          const { doc, updateDoc, increment } = await import('firebase/firestore');
+          await updateDoc(doc(db, 'users', user.uid), { tokens: increment(100) });
+        }}>
+           <Text style={styles.devBtnText}>[+100 Leaves]</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.devBtn} onPress={async () => {
+          const { collection, query, where, getDocs, deleteDoc } = await import('firebase/firestore');
+          const q = query(collection(db, 'events'), where('creatorId', '==', user.uid));
+          const snaps = await getDocs(q);
+          snaps.forEach(s => deleteDoc(s.ref));
+          Alert.alert("Purged", `Deleted ${snaps.size} test events.`);
+        }}>
+           <Text style={styles.devBtnText}>[Purge My Events]</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.devBtn} onPress={() => {
+           setDraft({...draft, title: "Dev Dummy Event", interest: "Testing", location: {lat: 50.2649, lng: 19.0238}});
+           setMode('wizard_location');
+        }}>
+           <Text style={styles.devBtnText}>[Spawn Draft Event]</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  };
+
   const renderHUD = () => {
     if (mode !== 'map') return null;
     return (
       <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
-        
-        {/* Top Right Settings */}
         <TouchableOpacity style={styles.settingsBtn} onPress={() => signOut(auth)}>
           <BlurView intensity={65} tint="light" style={styles.iconWrapper}>
             <Text style={{fontSize: 16}}>⚙️</Text>
           </BlurView>
         </TouchableOpacity>
 
-        {/* Top Left Base */}
         <View style={styles.topLeft} pointerEvents="box-none">
           <BlurView intensity={70} tint="light" style={styles.balancePill}>
-            <Text style={styles.balanceText}>{user?.tokens} 🍃 Balance</Text>
+            <Text style={styles.balanceText}>{user?.tokens} <Image source={require('../assets/leaf.png')} style={styles.inlineIcon} /> Balance</Text>
           </BlurView>
           
           <View style={styles.upcomingRow}>
             <TouchableOpacity style={styles.plusBtn} onPress={() => setMode('wizard_details')}>
-              <Text style={styles.plusBtnText}>+</Text>
+              <Image source={require('../assets/plus.png')} style={styles.plusIcon} />
             </TouchableOpacity>
             
             {joinedEvents.length > 0 && (
@@ -146,7 +176,6 @@ export default function MapScreen() {
           </View>
         </View>
 
-        {/* Bottom Filter Area */}
         <View style={styles.bottomBar} pointerEvents="box-none">
           <BlurView intensity={60} tint="light" style={styles.dateSliderContainer}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{paddingRight: 20}}>
@@ -191,7 +220,7 @@ export default function MapScreen() {
         {draft.location && (
           <View style={styles.row}>
              <TouchableOpacity style={styles.btnSecondary} onPress={() => setMode('wizard_details')}><Text style={styles.btnSecondaryTextDark}>Back</Text></TouchableOpacity>
-             <TouchableOpacity style={styles.btnPrimary} onPress={handleCreate}><Text style={styles.btnPrimaryText}>Lock 5 🍃 & Finalize</Text></TouchableOpacity>
+             <TouchableOpacity style={styles.btnPrimary} onPress={handleCreate}><Text style={styles.btnPrimaryText}>Lock 5 <Image source={require('../assets/leaf.png')} style={[styles.inlineIcon, {tintColor: '#fff'}]} /> & Finalize</Text></TouchableOpacity>
           </View>
         )}
       </BlurView>
@@ -220,8 +249,8 @@ export default function MapScreen() {
             <View style={styles.chatLocked}>
               <Text style={styles.chatLockedIco}>💬</Text>
               <Text style={styles.chatLockedTitle}>Tribal Chat is Locked</Text>
-              <Text style={styles.chatLockedSub}>Commit 1 🍃 to join the event and open communications with this tribe.</Text>
-              <TouchableOpacity style={styles.btnPrimaryFull} onPress={handleJoin}><Text style={styles.btnPrimaryText}>Join Tribe (1 🍃)</Text></TouchableOpacity>
+              <Text style={styles.chatLockedSub}>Commit 1 <Image source={require('../assets/leaf.png')} style={styles.inlineIcon} /> to join the event and open communications with this tribe.</Text>
+              <TouchableOpacity style={styles.btnPrimaryFull} onPress={handleJoin}><Text style={styles.btnPrimaryText}>Join Tribe (1 <Image source={require('../assets/leaf.png')} style={[styles.inlineIcon, {tintColor: '#fff'}]} />)</Text></TouchableOpacity>
             </View>
           ) : (
             <View style={styles.chatOpen}>
@@ -265,6 +294,7 @@ export default function MapScreen() {
       </Map>
 
       {renderHUD()}
+      {renderDevTools()}
       {mode === 'wizard_details' && renderWizardDetails()}
       {mode === 'wizard_location' && renderWizardLocation()}
       {mode === 'event_chat' && renderEventChat()}
@@ -278,14 +308,20 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   settingsBtn: { position: 'absolute', top: 35, right: 20 },
   iconWrapper: { padding: 12, borderRadius: 25, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 10 },
+  inlineIcon: { width: 15, height: 15, resizeMode: 'contain', marginLeft: 2 },
   
+  devPanel: { position: 'absolute', top: 110, right: 20, backgroundColor: 'rgba(200, 50, 50, 0.85)', padding: 18, borderRadius: 16, zIndex: 1000, elevation: 1000, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 15 },
+  devTitle: { fontFamily: Typography.heading, color: '#fff', fontSize: 13, marginBottom: 12, textAlign: 'center', letterSpacing: 2 },
+  devBtn: { backgroundColor: '#fff', paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10, marginBottom: 8, elevation: 5 },
+  devBtnText: { fontFamily: Typography.bodyBold, color: 'rgba(200, 50, 50, 1)', fontSize: 11, textAlign: 'center' },
+
   topLeft: { position: 'absolute', top: 35, left: 20 },
-  balancePill: { overflow: 'hidden', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, marginBottom: 15, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' },
+  balancePill: { overflow: 'hidden', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, marginBottom: 15, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)', flexDirection: 'row', alignItems: 'center' },
   balanceText: { fontFamily: Typography.bodyBold, color: Colors.primaryDark, fontSize: 13, letterSpacing: 0.5 },
   
   upcomingRow: { flexDirection: 'row', alignItems: 'center' },
   plusBtn: { width: 44, height: 44, backgroundColor: Colors.primary, borderRadius: 22, justifyContent: 'center', alignItems: 'center', shadowColor: Colors.primaryDark, shadowOpacity: 0.4, shadowRadius: 10, elevation: 5 },
-  plusBtnText: { color: '#fff', fontSize: 28, fontWeight: '400', marginTop: -4, lineHeight: 30 },
+  plusIcon: { width: 22, height: 22, resizeMode: 'contain', tintColor: '#fff', marginTop: -4 },
   upcomingScroll: { marginLeft: 12, maxWidth: 220 },
   upcomingIcon: { width: 40, height: 40, backgroundColor: 'rgba(255,255,255,0.85)', borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginRight: 10, borderWidth: 1, borderColor: '#eee', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 5 },
   upcomingInitial: { fontFamily: Typography.bodyBold, color: Colors.text, fontSize: 15 },
@@ -296,7 +332,7 @@ const styles = StyleSheet.create({
   datePillActive: { backgroundColor: 'rgba(255,255,255,0.95)', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 5 },
   datePillText: { fontFamily: Typography.bodySemibold, color: Colors.textLight, fontSize: 13 },
   datePillTextActive: { color: Colors.text },
-  fadeRight: { position: 'absolute', right: 0, top: 0, bottom: 0, width: 30, backgroundColor: 'linear-gradient(to right, rgba(255,255,255,0), rgba(255,255,255,0.6))' }, // Very subtle fade hint for Web
+  fadeRight: { position: 'absolute', right: 0, top: 0, bottom: 0, width: 30, backgroundColor: 'linear-gradient(to right, rgba(255,255,255,0), rgba(255,255,255,0.6))' },
 
   filterBtn: { borderRadius: 24, overflow: 'hidden' },
   filterBtnWrapper: { paddingHorizontal: 18, paddingVertical: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.5)' },

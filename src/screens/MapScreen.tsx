@@ -85,8 +85,8 @@ export default function MapScreen() {
     gender: 'Anyone',
     description: 'A simulation event to learn how joining works. Your Leaves will be instantly refunded since this is a test!',
     location: { 
-      latitude: Number(user?.homeLocation?.latitude || 50.2649) + 0.003, 
-      longitude: Number(user?.homeLocation?.longitude || 19.0238) + 0.003 
+      latitude: Number(user?.homeLocation?.latitude || 50.2649), 
+      longitude: Number(user?.homeLocation?.longitude || 19.0238)
     },
     creatorId: 'system',
     creatorName: 'The Tribes',
@@ -95,7 +95,7 @@ export default function MapScreen() {
     maxParticipants: 10
   };
 
-  let displayFilterEvents = (tutStep >= 6 && tutStep <= 7) ? [...events, dummyEvent] : events;
+  let displayFilterEvents = events;
   if (activeAgeFilters.length > 0) {
     displayFilterEvents = displayFilterEvents.filter(e => e.ageGroup && activeAgeFilters.includes(e.ageGroup));
   }
@@ -131,7 +131,8 @@ export default function MapScreen() {
       return true;
     });
   }
-  const displayEvents = displayFilterEvents;
+  let displayEvents = displayFilterEvents;
+  if (tutStep >= 6 && tutStep <= 7) displayEvents = [...displayEvents, dummyEvent];
   const joinedEvents = events.filter(e => e.participants?.includes(user?.uid || ''));
 
   const handleScroll = (event: any) => {
@@ -783,9 +784,12 @@ export default function MapScreen() {
       case 6:
         return (
           <View style={[StyleSheet.absoluteFill, {pointerEvents: 'box-none', zIndex: 9999}]}>
-            <View style={{position: 'absolute', top: '50%', left: '50%', transform: [{translateX: -130}, {translateY: -100}], backgroundColor: '#fff', padding: 20, borderRadius: 20, maxWidth: 260, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 20, elevation: 15}}>
+            <View style={{position: 'absolute', top: '50%', left: '50%', transform: [{translateX: -130}, {translateY: -160}], backgroundColor: '#fff', padding: 20, borderRadius: 20, maxWidth: 260, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 20, elevation: 15}}>
                <Text style={{fontFamily: Typography.bodySemibold, marginBottom: 10}}>6. Tribal Fires</Text>
-               <Text style={{fontFamily: Typography.body, color: '#666', marginBottom: 15}}>Active events show up as pins. Let's practice! Tap the Sunset Hike pin on the map below.</Text>
+               <Text style={{fontFamily: Typography.body, color: '#666', marginBottom: 10}}>Active events show up as pins. Let's practice! Tap the Sunset Hike pin on the center of the map below.</Text>
+               <TouchableOpacity onPress={() => { setTutStep(7); }} style={{alignSelf: 'center', paddingVertical: 5, marginBottom: 10}}>
+                  <Text style={{color: Colors.textLight, fontFamily: Typography.bodyBold}}>Skip Practice</Text>
+               </TouchableOpacity>
                <Feather name="arrow-down" size={30} color={Colors.primary} style={{alignSelf: 'center', marginTop: -5, marginBottom: -40}} />
             </View>
           </View>

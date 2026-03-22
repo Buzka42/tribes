@@ -85,8 +85,8 @@ export default function MapScreen() {
     gender: 'Anyone',
     description: 'A simulation event to learn how joining works. Your Leaves will be instantly refunded since this is a test!',
     location: { 
-      latitude: (user?.homeLocation?.latitude || 50.2649) + 0.003, 
-      longitude: (user?.homeLocation?.longitude || 19.0238) + 0.003 
+      latitude: Number(user?.homeLocation?.latitude || 50.2649) + 0.003, 
+      longitude: Number(user?.homeLocation?.longitude || 19.0238) + 0.003 
     },
     creatorId: 'system',
     creatorName: 'The Tribes',
@@ -772,8 +772,8 @@ export default function MapScreen() {
       case 5:
         return (
           <View style={[StyleSheet.absoluteFill, {pointerEvents: 'box-none', zIndex: 9999}]}>
-            <View style={{position: 'absolute', bottom: 120, left: 20, backgroundColor: '#fff', padding: 20, borderRadius: 20, maxWidth: 260, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 20, elevation: 15}}>
-               <Feather name="arrow-down-left" size={30} color={Colors.primary} style={{position: 'absolute', bottom: -35, left: 20}} />
+            <View style={{position: 'absolute', top: 120, left: 90, backgroundColor: '#fff', padding: 20, borderRadius: 20, maxWidth: 260, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 20, elevation: 15}}>
+               <Feather name="arrow-left" size={30} color={Colors.primary} style={{position: 'absolute', top: 20, left: -35}} />
                <Text style={{fontFamily: Typography.bodySemibold, marginBottom: 10}}>5. Create an Event</Text>
                <Text style={{fontFamily: Typography.body, color: '#666', marginBottom: 15}}>Ready to host? Tap the + icon to assemble a tribe right at the map's center crosshair!</Text>
                <TouchableOpacity style={[styles.btnPrimary, {alignSelf: 'flex-end', paddingVertical: 10}]} onPress={() => setTutStep(6)}><Text style={styles.btnPrimaryText}>Next</Text></TouchableOpacity>

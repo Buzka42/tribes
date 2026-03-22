@@ -1,5 +1,9 @@
 # Changelog
 
+- feat: Overhauled MapScreen Native and Web Tutorial Step 7 instructing users to engage the internal 'Join Tribe' action to complete the MVP Cold Start sequence.
+- fix: Rectified pointer lock issues on `onSelected` map markers allowing internal dummy-event validation mapping precisely to `tutStep === 6`.
+- chore: Realigned and fine-tuned UI bounds strictly adjusting Web (+180px) and Native (+195px) coordinates centering Step 5 `arrow-up` perfectly.
+- fix: Eliminated absolute fill wrappers across both platforms stripping interceptors and allowing underlying interactions during tutorial flow.
 - feat: Scaled `categorySub` architecture allowing user selection and strict map filtering of up to 3 subgroup arrays dynamically via multi-layer Accordions
 - feat: Imported `@react-native-community/datetimepicker` resolving cross-platform interactive date selectors triggering valid `date` objects in Firebase
 - feat: Executed `date-fns` integration syncing dynamic Map viewport against internal intervals (30 Days, Today, Tomorrow, Weekend, Next Week)

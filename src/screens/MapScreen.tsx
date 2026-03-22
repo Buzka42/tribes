@@ -772,36 +772,30 @@ export default function MapScreen() {
         );
       case 5:
         return (
-          <View style={[StyleSheet.absoluteFill, {pointerEvents: 'box-none', zIndex: 9999}]}>
-            <View style={{position: 'absolute', top: 170, left: 20, backgroundColor: '#fff', padding: 20, borderRadius: 20, maxWidth: 260, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 20, elevation: 15}}>
-               <Feather name="arrow-up" size={30} color={Colors.primary} style={{position: 'absolute', top: -26, left: 15}} />
-               <Text style={{fontFamily: Typography.bodySemibold, marginBottom: 10}}>5. Create an Event</Text>
-               <Text style={{fontFamily: Typography.body, color: '#666', marginBottom: 15}}>Ready to host? Tap the + icon to assemble a tribe right at the map's center crosshair!</Text>
-               <TouchableOpacity style={[styles.btnPrimary, {alignSelf: 'flex-end', paddingVertical: 10}]} onPress={() => setTutStep(6)}><Text style={styles.btnPrimaryText}>Next</Text></TouchableOpacity>
-            </View>
+          <View style={{position: 'absolute', top: 195, left: 20, backgroundColor: '#fff', padding: 20, borderRadius: 20, width: 260, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 20, elevation: 15, zIndex: 9999}}>
+             <Feather name="arrow-up" size={30} color={Colors.primary} style={{position: 'absolute', top: -25, left: 14}} />
+             <Text style={{fontFamily: Typography.bodySemibold, marginBottom: 10}}>5. Create an Event</Text>
+             <Text style={{fontFamily: Typography.body, color: '#666', marginBottom: 15}}>Ready to host? Tap the + icon to assemble a tribe right at the map's center crosshair!</Text>
+             <TouchableOpacity style={[styles.btnPrimary, {alignSelf: 'flex-end', paddingVertical: 10}]} onPress={() => setTutStep(6)}><Text style={styles.btnPrimaryText}>Next</Text></TouchableOpacity>
           </View>
         );
       case 6:
         return (
-          <View style={[StyleSheet.absoluteFill, {pointerEvents: 'box-none', zIndex: 9999}]}>
-            <View style={{position: 'absolute', bottom: 150, alignSelf: 'center', backgroundColor: '#fff', padding: 20, borderRadius: 20, maxWidth: 300, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 20, elevation: 15}}>
-               <Feather name="arrow-up" size={30} color={Colors.primary} style={{position: 'absolute', top: -26, left: '50%', transform: [{translateX: -15}]}} />
-               <Text style={{fontFamily: Typography.bodySemibold, marginBottom: 10}}>6. Tribal Fires</Text>
-               <Text style={{fontFamily: Typography.body, color: '#666', marginBottom: 10}}>Active events show up as pins. Let's practice! Tap the test pin exactly at the center of the map above.</Text>
-               <TouchableOpacity onPress={() => { setTutStep(7); }} style={{alignSelf: 'center', paddingVertical: 5, marginBottom: 5}}>
-                  <Text style={{color: Colors.textLight, fontFamily: Typography.bodyBold}}>Skip Practice</Text>
-               </TouchableOpacity>
-            </View>
+          <View style={{position: 'absolute', top: 100, left: '50%', transform: [{translateX: -150}], backgroundColor: '#fff', padding: 20, borderRadius: 20, width: 300, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 20, elevation: 15, zIndex: 9999}}>
+             <Text style={{fontFamily: Typography.bodySemibold, marginBottom: 10}}>6. Tribal Fires</Text>
+             <Text style={{fontFamily: Typography.body, color: '#666', marginBottom: 10}}>Active events show up as pins. Let's practice! Tap the test pin exactly at the center of the map.</Text>
+             <TouchableOpacity onPress={() => { setTutStep(7); }} style={{alignSelf: 'center', paddingVertical: 5, marginBottom: 5}}>
+                <Text style={{color: Colors.textLight, fontFamily: Typography.bodyBold}}>Skip Practice</Text>
+             </TouchableOpacity>
+             <Feather name="arrow-down" size={30} color={Colors.primary} style={{alignSelf: 'center', position: 'absolute', bottom: -30}} />
           </View>
         );
       case 7:
         return (
-          <View style={[StyleSheet.absoluteFill, {pointerEvents: 'box-none', zIndex: 9999}]}>
-            <View style={{position: 'absolute', bottom: 150, alignSelf: 'center', backgroundColor: '#fff', padding: 20, borderRadius: 20, maxWidth: 300, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 20, elevation: 15}}>
-               <Text style={{fontFamily: Typography.bodySemibold, marginBottom: 10}}>Tour Complete! 🎉</Text>
-               <Text style={{fontFamily: Typography.body, color: '#666', marginBottom: 15}}>You now know how to view tribes, see their chat, and request to join! Have fun exploring the world.</Text>
-               <TouchableOpacity style={[styles.btnPrimary, {alignSelf: 'flex-end', paddingVertical: 10}]} onPress={() => { setTutStep(8); setMode('map'); }}><Text style={styles.btnPrimaryText}>Got it!</Text></TouchableOpacity>
-            </View>
+          <View style={{position: 'absolute', top: 120, left: '50%', transform: [{translateX: -150}], backgroundColor: '#fff', padding: 20, borderRadius: 20, width: 300, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 20, elevation: 15, zIndex: 9999}} pointerEvents="none">
+             <Text style={{fontFamily: Typography.bodySemibold, marginBottom: 10}}>7. Joining a Tribe</Text>
+             <Text style={{fontFamily: Typography.body, color: '#666', marginBottom: 15}}>This is a locked Tribal Chat. It stays secure until you commit 1 Leaf to join the event. Go ahead, tap the "Join Tribe" button below!</Text>
+             <Feather name="arrow-down" size={30} color={Colors.primary} style={{alignSelf: 'center', marginTop: 10}} />
           </View>
         );
       default:
@@ -822,7 +816,7 @@ export default function MapScreen() {
             id={ev.id}
             coordinate={[ev.location.longitude, ev.location.latitude]}
             onSelected={() => {
-              if (mode === 'map') {
+              if (mode === 'map' || tutStep === 6) {
                 setSelectedEvent(ev as any);
                 setMode('event_chat');
                 if (tutStep === 6 && ev.id === 'tutorial-dummy') setTutStep(7);

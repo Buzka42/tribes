@@ -8,7 +8,7 @@ export interface TribeVent {
   title: string;
   interest: string;
   categoryId?: string;
-  categorySub?: string;
+  categorySub?: string[];
   participantLimit: number;
   isPrivate: boolean;
   tokenCost: number;
@@ -41,7 +41,7 @@ export function useEvents() {
     return unsubscribe;
   }, []);
 
-  const createEvent = async (title: string, categoryId: string, categorySub: string, participantLimit: number, isPrivate: boolean, tokenCost: number, location: any) => {
+  const createEvent = async (title: string, categoryId: string, categorySub: string[], participantLimit: number, isPrivate: boolean, tokenCost: number, location: any, date: Date) => {
     const user = auth.currentUser;
     if (!user) throw new Error("Not logged in");
 
@@ -54,14 +54,14 @@ export function useEvents() {
     await addDoc(collection(db, 'events'), {
       creatorId: user.uid,
       title,
-      interest: categorySub, // backward compatibility
+      interest: categorySub.length > 0 ? categorySub[0] : categoryId, // backward compatibility
       categoryId,
       categorySub,
       participantLimit,
       isPrivate,
       tokenCost,
       location,
-      time: new Date(),
+      time: date,
       participants: [user.uid], // Creator participates natively
       isExternal: false
     });

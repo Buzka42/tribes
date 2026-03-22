@@ -1,5 +1,11 @@
 # Changelog
 
+- feat: Scaled `categorySub` architecture allowing user selection and strict map filtering of up to 3 subgroup arrays dynamically via multi-layer Accordions
+- feat: Imported `@react-native-community/datetimepicker` resolving cross-platform interactive date selectors triggering valid `date` objects in Firebase
+- feat: Executed `date-fns` integration syncing dynamic Map viewport against internal intervals (30 Days, Today, Tomorrow, Weekend, Next Week)
+- chore: Enforced expansive subgroup content overhaul mapping exact granular activities universally over all main categories globally
+- fix: Recovered MapScreen TSX layout structure terminating trailing JSX crashes resolving severe Linter and IDE parser discrepancies
+- fix: Corrected Profile Update settings in `SettingsScreen.tsx` replacing invalid `user.id` property mapped to `user.uid` parameter for valid persistence
 - feat: Implemented structured Category rendering engine mapping dynamic icons and interface colors
 - feat: Allowed organizers to delete events via EventChat unlocking 5 🍃 refund to host and 1 🍃 to attendees
 - feat: Enabled dynamic Category Sub-group inheritance of parent-color active states in Creation Wizard

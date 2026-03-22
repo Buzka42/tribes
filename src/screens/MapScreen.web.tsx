@@ -10,7 +10,7 @@ import { useEvents, TribeVent } from '../hooks/useEvents';
 import { auth, db } from '../config/firebase';
 import { signOut } from 'firebase/auth';
 import { Colors, Typography } from '../theme';
-import { format } from 'date-fns';
+import { format, isToday, isTomorrow, isWeekend, addDays, startOfWeek, endOfWeek, addWeeks } from 'date-fns';
 import { Feather } from '@expo/vector-icons';
 import { EVENT_CATEGORIES, CategoryGroupId } from '../data/categories';
 
@@ -22,8 +22,28 @@ export default function MapScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   
   const [mode, setMode] = useState<'map' | 'wizard_details' | 'wizard_location' | 'event_chat' | 'filters'>('map');
-  const [draft, setDraft] = useState({ title: '', categoryId: '' as CategoryGroupId | '', categorySub: '', isPrivate: false, limit: '10', location: null as any, address: '' });
-  const [activeFilters, setActiveFilters] = useState<CategoryGroupId[]>([]);
+  const [draft, setDraft] = useState({ title: '', categoryId: '' as CategoryGroupId | '', categorySub: [] as string[], isPrivate: false, limit: '10', location: null as any, address: '', date: null as Date | null });
+  const [activeFilters, setActiveFilters] = useState<Record<string, string[]>>({});
+  const [expandedCat, setExpandedCat] = useState<string | null>(null);
+
+  const toggleCategory = (catId: string) => {
+    const newFilters = {...activeFilters};
+    if (newFilters[catId]) delete newFilters[catId];
+    else newFilters[catId] = [];
+    setActiveFilters(newFilters);
+  };
+
+  const toggleSubFilter = (catId: string, sub: string) => {
+    const newFilters = {...activeFilters};
+    if (!newFilters[catId] || newFilters[catId].length === 0) newFilters[catId] = [sub];
+    else {
+      if (newFilters[catId].includes(sub)) {
+        newFilters[catId] = newFilters[catId].filter(s => s !== sub);
+        if (newFilters[catId].length === 0) delete newFilters[catId];
+      } else newFilters[catId].push(sub);
+    }
+    setActiveFilters(newFilters);
+  };
   const [selectedEvent, setSelectedEvent] = useState<TribeVent | null>(null);
   const [dateFilter, setDateFilter] = useState('30 Days');
   const [tutStep, setTutStep] = useState(0);
@@ -52,7 +72,7 @@ export default function MapScreen() {
     title: 'Sunset Hike 🌄',
     interest: 'Hiking',
     categoryId: 'outdoor',
-    categorySub: 'Hiking',
+    categorySub: ['Hiking'],
     description: 'A simulation event to learn how joining works. Your Leaves will be instantly refunded since this is a test!',
     location: { 
       latitude: (user?.homeLocation?.latitude || 50.2649) + 0.003, 
@@ -66,8 +86,34 @@ export default function MapScreen() {
   };
 
   let displayFilterEvents = tutStep === 4 ? [...events, dummyEvent] : events;
-  if (activeFilters.length > 0) {
-    displayFilterEvents = displayFilterEvents.filter(e => e.categoryId && activeFilters.includes(e.categoryId as CategoryGroupId));
+  if (Object.keys(activeFilters).length > 0) {
+    displayFilterEvents = displayFilterEvents.filter(e => {
+      if (!e.categoryId) return false;
+      const selectedSubs = activeFilters[e.categoryId];
+      if (!selectedSubs) return false; 
+      if (selectedSubs.length === 0) return true; 
+      const eventSubs = Array.isArray(e.categorySub) ? e.categorySub : (e.categorySub ? [e.categorySub as unknown as string] : []);
+      return selectedSubs.some(sub => eventSubs.includes(sub));
+    });
+  }
+  
+  const todayStart = new Date();
+  todayStart.setHours(0,0,0,0);
+
+  if (dateFilter !== 'All') {
+    displayFilterEvents = displayFilterEvents.filter(e => {
+      if (!e.time) return false;
+      const t = new Date(e.time);
+      if (dateFilter === '30 Days') return t >= todayStart && t <= addDays(todayStart, 30);
+      if (dateFilter === 'Today') return isToday(t);
+      if (dateFilter === 'Tomorrow') return isTomorrow(t);
+      if (dateFilter === 'Weekend') return t >= todayStart && t <= addDays(todayStart, 7) && isWeekend(t);
+      if (dateFilter === 'Next Week') {
+         const nextWk = addWeeks(todayStart, 1);
+         return t >= startOfWeek(nextWk, { weekStartsOn: 1 }) && t <= endOfWeek(nextWk, { weekStartsOn: 1 });
+      }
+      return true;
+    });
   }
   const displayEvents = displayFilterEvents;
   const joinedEvents = events.filter(e => e.participants?.includes(user?.uid || ''));
@@ -91,14 +137,14 @@ export default function MapScreen() {
 
   const handleCreate = async () => {
     try {
-      if (!draft.title || !draft.categoryId || !draft.categorySub || !draft.location) return Alert.alert("Incomplete", "Make sure title, category, subcategory and location are set.");
+      if (!draft.title || !draft.categoryId || (draft.categoryId !== 'time_limited' && draft.categorySub.length === 0) || !draft.location || !draft.date) return window.alert("Incomplete\n\nMake sure title, category, subcategory, date and location are set.");
       await createEvent(draft.title, draft.categoryId, draft.categorySub, parseInt(draft.limit) || 10, draft.isPrivate, 5, {
         latitude: draft.location.lat,
         longitude: draft.location.lng,
         address: draft.address || "Pinned carefully on Map"
-      });
+      }, draft.date);
       setMode('map');
-      setDraft({ title: '', categoryId: '', categorySub: '', isPrivate: false, limit: '10', location: null, address: '' });
+      setDraft({ title: '', categoryId: '', categorySub: [], isPrivate: false, limit: '10', location: null, address: '', date: null });
       Alert.alert("Tribe Assembled", "Your event is live. 5 Leaves were locked.");
     } catch(err: any) { Alert.alert("Error", err.message); }
   };
@@ -206,7 +252,7 @@ export default function MapScreen() {
            <Text style={styles.devBtnText}>[CLR]</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.devBtn} onPress={() => {
-           setDraft({...draft, title: "Dev Dummy Event", categoryId: 'outdoor', categorySub: "Testing", location: {lat: 50.2649, lng: 19.0238}});
+           setDraft({...draft, title: "Dev Dummy Event", categoryId: 'outdoor', categorySub: ["Hiking"], location: {lat: 50.2649, lng: 19.0238}, date: new Date()});
            setMode('wizard_location');
         }}>
            <Text style={styles.devBtnText}>[PIN]</Text>
@@ -289,8 +335,8 @@ export default function MapScreen() {
           </BlurView>
 
           <TouchableOpacity style={styles.filterBtn} onPress={() => setMode('filters')}>
-            <BlurView intensity={70} tint="light" style={[styles.filterBtnWrapper, activeFilters.length > 0 && {backgroundColor: Colors.primary, borderColor: Colors.primary}]}>
-              <Text style={[styles.filterBtnText, activeFilters.length > 0 && {color: '#fff'}]}>Filters {activeFilters.length > 0 ? `(${activeFilters.length})` : '☰'}</Text>
+            <BlurView intensity={70} tint="light" style={[styles.filterBtnWrapper, Object.keys(activeFilters).length > 0 && {backgroundColor: Colors.primary, borderColor: Colors.primary}]}>
+              <Text style={[styles.filterBtnText, Object.keys(activeFilters).length > 0 && {color: '#fff'}]}>Filters {Object.keys(activeFilters).length > 0 ? `(${Object.keys(activeFilters).length})` : '☰'}</Text>
             </BlurView>
           </TouchableOpacity>
         </View>
@@ -306,24 +352,61 @@ export default function MapScreen() {
         
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{marginBottom: draft.categoryId ? 10 : 20}}>
           {EVENT_CATEGORIES.map(cat => (
-             <TouchableOpacity key={cat.id} style={[styles.wizardCat, draft.categoryId === cat.id && {backgroundColor: cat.color, borderColor: cat.color}]} onPress={() => setDraft({...draft, categoryId: cat.id as CategoryGroupId, categorySub: ''})}>
+             <TouchableOpacity key={cat.id} style={[styles.wizardCat, draft.categoryId === cat.id && {backgroundColor: cat.color, borderColor: cat.color}]} onPress={() => setDraft({...draft, categoryId: cat.id as CategoryGroupId, categorySub: []})}>
                <Feather name={cat.icon} size={14} color={draft.categoryId === cat.id ? '#fff' : Colors.text} />
                <Text style={[styles.wizardCatText, draft.categoryId === cat.id && {color: '#fff'}]}>{cat.label}</Text>
              </TouchableOpacity>
           ))}
         </ScrollView>
-        {draft.categoryId ? (
+        {draft.categoryId && EVENT_CATEGORIES.find(c => c.id === draft.categoryId)?.subgroups.length ? (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{marginBottom: 20}}>
              {EVENT_CATEGORIES.find(c => c.id === draft.categoryId)?.subgroups.map(sub => {
                 const catColor = EVENT_CATEGORIES.find(ce => ce.id === draft.categoryId)?.color || Colors.primary;
+                const isActive = draft.categorySub.includes(sub);
                 return (
-                  <TouchableOpacity key={sub} style={[styles.wizardSubCat, draft.categorySub === sub && {backgroundColor: catColor}]} onPress={() => setDraft({...draft, categorySub: sub})}>
-                    <Text style={[styles.wizardSubCatText, draft.categorySub === sub && {color: '#fff'}]}>{sub}</Text>
+                  <TouchableOpacity 
+                    key={sub} 
+                    style={[styles.wizardSubCat, isActive && {backgroundColor: catColor}]} 
+                    onPress={() => {
+                        const subs = draft.categorySub;
+                        if (subs.includes(sub)) {
+                            setDraft({...draft, categorySub: subs.filter(s => s !== sub)});
+                        } else {
+                            if (subs.length < 3) {
+                                setDraft({...draft, categorySub: [...subs, sub]});
+                            } else {
+                                if (Platform.OS === 'web') window.alert('You can select up to 3 subcategories.');
+                                else Alert.alert('Limit Reached', 'You can select up to 3 subcategories.');
+                            }
+                        }
+                    }}
+                  >
+                    <Text style={[styles.wizardSubCatText, isActive && {color: '#fff'}]}>{sub}</Text>
                   </TouchableOpacity>
                 );
              })}
           </ScrollView>
         ) : null}
+
+        {/* @ts-ignore */}
+        <input
+          type="datetime-local"
+          value={draft.date ? format(draft.date, "yyyy-MM-dd'T'HH:mm") : ''}
+          onChange={(e: any) => setDraft({...draft, date: new Date(e.target.value)})}
+          style={{
+            width: '92%', 
+            padding: '16px', 
+            borderRadius: '16px', 
+            border: '1px solid rgba(255,255,255,0.8)', 
+            backgroundColor: 'rgba(255,255,255,0.8)', 
+            fontFamily: Typography.body,
+            fontSize: '15px', 
+            color: Colors.text, 
+            marginBottom: '15px', 
+            alignSelf: 'center',
+            boxSizing: 'border-box'
+          }}
+        />
 
         <TextInput style={styles.input} placeholder="Location Base (City/Street)" placeholderTextColor="#999" value={wizardQuery} onChangeText={searchWizardLocation} />
         {wizardSuggestions.length > 0 && (
@@ -445,24 +528,47 @@ export default function MapScreen() {
         </View>
         <Text style={{fontFamily: Typography.body, color: Colors.textLight, marginBottom: 15}}>Select categories to show on map. Deselect all to view everything.</Text>
         <ScrollView contentContainerStyle={{paddingBottom: 40}}>
-          <View style={styles.filterGrid}>
-            {EVENT_CATEGORIES.map(cat => {
-              const isActive = activeFilters.includes(cat.id);
-              return (
-                <TouchableOpacity 
-                   key={cat.id} 
-                   style={[styles.filterCard, isActive && [styles.filterCardActive, {backgroundColor: cat.color, borderColor: cat.color}]]}
-                   onPress={() => {
-                     if (isActive) setActiveFilters(prev => prev.filter(p => p !== cat.id));
-                     else setActiveFilters(prev => [...prev, cat.id]);
-                   }}
-                >
-                   <Feather name={cat.icon} size={20} color={isActive ? '#fff' : cat.color} />
-                   <Text style={[styles.filterCardText, isActive ? {color: '#fff'} : {color: Colors.text}]}>{cat.label}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+           {EVENT_CATEGORIES.map(cat => {
+             const isCatActive = activeFilters[cat.id] !== undefined;
+             const isExpanded = expandedCat === cat.id;
+             return (
+               <View key={cat.id} style={{marginBottom: 10}}>
+                 <View style={{flexDirection: 'row', alignItems: 'center'}}>
+                   <TouchableOpacity 
+                     style={[styles.filterCard, {flex: 1, marginRight: 10}, isCatActive && [styles.filterCardActive, {backgroundColor: cat.color, borderColor: cat.color}]]}
+                     onPress={() => toggleCategory(cat.id)}
+                   >
+                     <Feather name={cat.icon} size={20} color={isCatActive ? '#fff' : cat.color} />
+                     <Text style={[styles.filterCardText, isCatActive ? {color: '#fff'} : {color: Colors.text}]}>{cat.label} {isCatActive && activeFilters[cat.id].length > 0 ? `(${activeFilters[cat.id].length})` : ''}</Text>
+                   </TouchableOpacity>
+                   {cat.subgroups.length > 0 && (
+                     <TouchableOpacity 
+                       style={{padding: 15, backgroundColor: 'rgba(255,255,255,0.5)', borderRadius: 16}} 
+                       onPress={() => setExpandedCat(isExpanded ? null : cat.id)}
+                     >
+                       <Feather name={isExpanded ? "chevron-up" : "chevron-down"} size={20} color={Colors.text} />
+                     </TouchableOpacity>
+                   )}
+                 </View>
+                 {isExpanded && cat.subgroups.length > 0 && (
+                   <View style={{flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10, paddingLeft: 10}}>
+                     {cat.subgroups.map(sub => {
+                       const isSubActive = isCatActive && (activeFilters[cat.id].length === 0 || activeFilters[cat.id].includes(sub));
+                       return (
+                         <TouchableOpacity 
+                           key={sub}
+                           style={[styles.wizardSubCat, isSubActive && {backgroundColor: cat.color, borderColor: cat.color, shadowOpacity: 0.2}]}
+                           onPress={() => toggleSubFilter(cat.id, sub)}
+                         >
+                           <Text style={[styles.wizardSubCatText, isSubActive && {color: '#fff'}]}>{sub}</Text>
+                         </TouchableOpacity>
+                       )
+                     })}
+                   </View>
+                 )}
+               </View>
+             );
+           })}
         </ScrollView>
       </BlurView>
     </View>

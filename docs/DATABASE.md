@@ -19,7 +19,7 @@
 - `title` (string)
 - `interest` (string) - legacy fallback
 - `categoryId` (string) - Master Group filter (e.g. 'sports')
-- `categorySub` (string) - Selectable sub-group string
+- `categorySub` (array of strings) - Up to 3 selectable sub-group strings
 - `location` (Geopoint / Address data)
   - `latitude` (number)
   - `longitude` (number)

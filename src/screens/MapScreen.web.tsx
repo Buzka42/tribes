@@ -91,7 +91,7 @@ export default function MapScreen() {
     maxParticipants: 10
   };
 
-  let displayFilterEvents = tutStep === 4 ? [...events, dummyEvent] : events;
+  let displayFilterEvents = (tutStep >= 6 && tutStep <= 7) ? [...events, dummyEvent] : events;
   if (activeAgeFilters.length > 0) {
     displayFilterEvents = displayFilterEvents.filter(e => e.ageGroup && activeAgeFilters.includes(e.ageGroup));
   }
@@ -194,53 +194,6 @@ export default function MapScreen() {
 
   // --- COMPONENT RENDERS ---
 
-  const renderTutorial = () => {
-    if (tutStep === 0) return null;
-    return (
-      <View style={[StyleSheet.absoluteFill, { zIndex: 9999, elevation: 9999 }]} pointerEvents="box-none">
-        {tutStep === 1 && (
-          <View style={{position: 'absolute', top: 95, left: 20, backgroundColor: Colors.surface, padding: 15, borderRadius: 16, width: 240, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 15, elevation: 10}}>
-            <Feather name="arrow-up" color={Colors.primary} size={26} style={{position: 'absolute', top: -19, left: 26}} />
-            <Text style={{fontFamily: Typography.bodyBold, color: Colors.text, fontSize: 13, lineHeight: 20}}>
-              Your Leaves. They keep the tribe accountable and prevent flaking!
-            </Text>
-            <TouchableOpacity onPress={() => setTutStep(2)} style={{marginTop: 10, alignSelf: 'flex-end'}}><Text style={{color: Colors.primary, fontFamily: Typography.bodyBold}}>Next ›</Text></TouchableOpacity>
-          </View>
-        )}
-        
-        {tutStep === 2 && (
-          <View style={{position: 'absolute', top: 104, left: 95, backgroundColor: Colors.surface, padding: 15, borderRadius: 16, width: 240, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 15, elevation: 10}}>
-            <Feather name="arrow-left" color={Colors.primary} size={26} style={{position: 'absolute', top: 14, left: -24}} />
-            <Text style={{fontFamily: Typography.bodyBold, color: Colors.text, fontSize: 13, lineHeight: 20}}>
-              The Origin. Lock 5 Leaves to host an event. 80% is returned upon completion.
-            </Text>
-            <TouchableOpacity onPress={() => setTutStep(3)} style={{marginTop: 10, alignSelf: 'flex-end'}}><Text style={{color: Colors.primary, fontFamily: Typography.bodyBold}}>Next ›</Text></TouchableOpacity>
-          </View>
-        )}
-
-        {tutStep === 3 && (
-          <View style={{position: 'absolute', bottom: 105, left: 20, right: 20, backgroundColor: Colors.surface, padding: 15, borderRadius: 16, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 15, elevation: 10}}>
-            <Text style={{fontFamily: Typography.bodyBold, color: Colors.text, fontSize: 14, lineHeight: 20, textAlign: 'center'}}>
-              Slide through dates or hit Filters to drill down to your perfect tech or outdoor adventure.
-            </Text>
-            <TouchableOpacity onPress={() => setTutStep(4)} style={{marginTop: 10, alignSelf: 'center'}}><Text style={{color: Colors.primary, fontFamily: Typography.bodyBold}}>Next ›</Text></TouchableOpacity>
-            <Feather name="arrow-down" color={Colors.primary} size={26} style={{position: 'absolute', bottom: -20, left: '50%', transform: [{translateX: -13}]}} />
-          </View>
-        )}
-
-        {tutStep === 4 && mode === 'map' && (
-          <View style={{position: 'absolute', top: 120, left: '50%', transform: [{translateX: -160}], backgroundColor: Colors.surface, padding: 20, borderRadius: 24, width: 320, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 15, elevation: 10, shadowOffset: {width:0, height:5}}}>
-            <Text style={{fontFamily: Typography.heading, fontSize: 20, color: Colors.text, marginBottom: 6}}>Simulation Phase</Text>
-            <Text style={{fontFamily: Typography.body, color: Colors.text, fontSize: 13, lineHeight: 20, marginBottom: 15}}>A test event <Text style={{fontFamily: Typography.bodyBold}}>Sunset Hike 🌄</Text> just spawned near your location! Tap its green pin on the map to see how joining works.</Text>
-            <TouchableOpacity onPress={() => { setTutStep(0); Alert.alert('Welcome!', 'The map is yours.'); }} style={{alignSelf: 'center', paddingVertical: 8, marginTop: 5}}>
-               <Text style={{color: Colors.textLight, fontFamily: Typography.bodyBold}}>Skip Simulation</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-      </View>
-    );
-  };
-
   const renderDevTools = () => {
     if (!user?.isDev) return null;
     return (
@@ -299,10 +252,9 @@ export default function MapScreen() {
 
         <TouchableOpacity style={[styles.locateBtn, {top: 170}]} onPress={() => {
           setMode('search_map');
-          if (tutStep === 1) setTutStep(4);
         }}>
-          <BlurView intensity={65} tint="light" style={[styles.iconWrapper, tutStep === 1 && {borderColor: Colors.primary, borderWidth: 2}]}>
-            <Feather name="search" size={18} color={tutStep === 1 ? Colors.primary : Colors.text} />
+          <BlurView intensity={65} tint="light" style={[styles.iconWrapper]}>
+            <Feather name="search" size={18} color={Colors.text} />
           </BlurView>
         </TouchableOpacity>
 
@@ -741,6 +693,96 @@ export default function MapScreen() {
     </View>
   );
 
+  const renderTutorial = () => {
+    switch(tutStep) {
+      case 0:
+        return (
+          <View style={[StyleSheet.absoluteFill, {backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', zIndex: 9999}]}>
+            <Text style={{fontFamily: Typography.heading, color: '#fff', fontSize: 28, marginBottom: 15}}>Welcome to The Tribes</Text>
+            <Text style={{fontFamily: Typography.body, color: '#fff', fontSize: 16, textAlign: 'center', paddingHorizontal: 30, marginBottom: 30, lineHeight: 24}}>Discover local events, meet new people, and assemble your tribe. Let's take a quick tour!</Text>
+            <TouchableOpacity style={styles.btnPrimary} onPress={() => setTutStep(1)}><Text style={styles.btnPrimaryText}>Start Tour</Text></TouchableOpacity>
+          </View>
+        );
+      case 1:
+        return (
+          <View style={[StyleSheet.absoluteFill, {pointerEvents: 'box-none', zIndex: 9999}]}>
+            <View style={{position: 'absolute', top: 110, left: 20, backgroundColor: '#fff', padding: 20, borderRadius: 20, maxWidth: 260, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 20, elevation: 15}}>
+               <Feather name="arrow-up-left" size={30} color={Colors.primary} style={{position: 'absolute', top: -35, left: 20}} />
+               <Text style={{fontFamily: Typography.bodySemibold, marginBottom: 10}}>1. Your Leaves</Text>
+               <Text style={{fontFamily: Typography.body, color: '#666', marginBottom: 15}}>Leaves are your currency. Use them to join and create events. You get 5 free every day!</Text>
+               <TouchableOpacity style={[styles.btnPrimary, {alignSelf: 'flex-end', paddingVertical: 10}]} onPress={() => setTutStep(2)}><Text style={styles.btnPrimaryText}>Next</Text></TouchableOpacity>
+            </View>
+          </View>
+        );
+      case 2:
+        return (
+          <View style={[StyleSheet.absoluteFill, {pointerEvents: 'box-none', zIndex: 9999}]}>
+            <View style={{position: 'absolute', top: 110, right: 20, backgroundColor: '#fff', padding: 20, borderRadius: 20, maxWidth: 260, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 20, elevation: 15}}>
+               <Feather name="arrow-up-right" size={30} color={Colors.primary} style={{position: 'absolute', top: -35, right: 20}} />
+               <Text style={{fontFamily: Typography.bodySemibold, marginBottom: 10}}>2. Settings</Text>
+               <Text style={{fontFamily: Typography.body, color: '#666', marginBottom: 15}}>Tap here to update your profile, tags, and adjust app preferences.</Text>
+               <TouchableOpacity style={[styles.btnPrimary, {alignSelf: 'flex-end', paddingVertical: 10}]} onPress={() => setTutStep(3)}><Text style={styles.btnPrimaryText}>Next</Text></TouchableOpacity>
+            </View>
+          </View>
+        );
+      case 3:
+        return (
+          <View style={[StyleSheet.absoluteFill, {pointerEvents: 'box-none', zIndex: 9999}]}>
+            <View style={{position: 'absolute', top: 230, right: 20, backgroundColor: '#fff', padding: 20, borderRadius: 20, maxWidth: 260, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 20, elevation: 15}}>
+               <Feather name="arrow-up-right" size={30} color={Colors.primary} style={{position: 'absolute', top: -35, right: 20}} />
+               <Text style={{fontFamily: Typography.bodySemibold, marginBottom: 10}}>3. Global Navigation</Text>
+               <Text style={{fontFamily: Typography.body, color: '#666', marginBottom: 15}}>Center the map to your home or search to instantly fly to any location worldwide.</Text>
+               <TouchableOpacity style={[styles.btnPrimary, {alignSelf: 'flex-end', paddingVertical: 10}]} onPress={() => setTutStep(4)}><Text style={styles.btnPrimaryText}>Next</Text></TouchableOpacity>
+            </View>
+          </View>
+        );
+      case 4:
+        return (
+          <View style={[StyleSheet.absoluteFill, {pointerEvents: 'box-none', zIndex: 9999}]}>
+            <View style={{position: 'absolute', bottom: 120, right: 20, backgroundColor: '#fff', padding: 20, borderRadius: 20, maxWidth: 260, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 20, elevation: 15}}>
+               <Feather name="arrow-down-right" size={30} color={Colors.primary} style={{position: 'absolute', bottom: -35, right: 20}} />
+               <Text style={{fontFamily: Typography.bodySemibold, marginBottom: 10}}>4. Find Your Vibe</Text>
+               <Text style={{fontFamily: Typography.body, color: '#666', marginBottom: 15}}>Use filters to discover specific events based on category, age, or gender.</Text>
+               <TouchableOpacity style={[styles.btnPrimary, {alignSelf: 'flex-end', paddingVertical: 10}]} onPress={() => setTutStep(5)}><Text style={styles.btnPrimaryText}>Next</Text></TouchableOpacity>
+            </View>
+          </View>
+        );
+      case 5:
+        return (
+          <View style={[StyleSheet.absoluteFill, {pointerEvents: 'box-none', zIndex: 9999}]}>
+            <View style={{position: 'absolute', bottom: 120, left: 20, backgroundColor: '#fff', padding: 20, borderRadius: 20, maxWidth: 260, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 20, elevation: 15}}>
+               <Feather name="arrow-down-left" size={30} color={Colors.primary} style={{position: 'absolute', bottom: -35, left: 20}} />
+               <Text style={{fontFamily: Typography.bodySemibold, marginBottom: 10}}>5. Create an Event</Text>
+               <Text style={{fontFamily: Typography.body, color: '#666', marginBottom: 15}}>Ready to host? Tap the + icon to assemble a tribe right at the map's center crosshair!</Text>
+               <TouchableOpacity style={[styles.btnPrimary, {alignSelf: 'flex-end', paddingVertical: 10}]} onPress={() => setTutStep(6)}><Text style={styles.btnPrimaryText}>Next</Text></TouchableOpacity>
+            </View>
+          </View>
+        );
+      case 6:
+        return (
+          <View style={[StyleSheet.absoluteFill, {pointerEvents: 'box-none', zIndex: 9999}]}>
+            <View style={{position: 'absolute', top: '50%', left: '50%', transform: [{translateX: -130}, {translateY: -100}], backgroundColor: '#fff', padding: 20, borderRadius: 20, maxWidth: 260, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 20, elevation: 15}}>
+               <Text style={{fontFamily: Typography.bodySemibold, marginBottom: 10}}>6. Tribal Fires</Text>
+               <Text style={{fontFamily: Typography.body, color: '#666', marginBottom: 15}}>Active events show up as pins. Let's practice! Tap the Sunset Hike pin on the map below.</Text>
+               <Feather name="arrow-down" size={30} color={Colors.primary} style={{alignSelf: 'center', marginTop: -5, marginBottom: -40}} />
+            </View>
+          </View>
+        );
+      case 7:
+        return (
+          <View style={[StyleSheet.absoluteFill, {pointerEvents: 'box-none', zIndex: 9999}]}>
+            <View style={{position: 'absolute', bottom: 120, left: 20, backgroundColor: '#fff', padding: 20, borderRadius: 20, maxWidth: 260, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 20, elevation: 15}}>
+               <Text style={{fontFamily: Typography.bodySemibold, marginBottom: 10}}>Tour Complete! 🎉</Text>
+               <Text style={{fontFamily: Typography.body, color: '#666', marginBottom: 15}}>You now know how to view tribes, see their chat, and request to join! Have fun exploring the world.</Text>
+               <TouchableOpacity style={[styles.btnPrimary, {alignSelf: 'flex-end', paddingVertical: 10}]} onPress={() => { setTutStep(8); setMode('map'); }}><Text style={styles.btnPrimaryText}>Got it!</Text></TouchableOpacity>
+            </View>
+          </View>
+        );
+      default:
+        return null;
+    }
+  };
+
   return (
     <View style={styles.container}>
       <Map
@@ -754,10 +796,13 @@ export default function MapScreen() {
         {displayEvents.map(ev => (
           <Marker 
             key={ev.id} longitude={ev.location.longitude} latitude={ev.location.latitude} anchor="center"
-            onClick={(e: any) => {
-              if(mode === 'map') { e.originalEvent.stopPropagation(); setSelectedEvent(ev); setMode('event_chat'); }
-            }}
-          >
+            onClick={() => {
+              if (mode === 'map') {
+                setSelectedEvent(ev as any);
+                setMode('event_chat');
+                if (tutStep === 6 && ev.id === 'tutorial-dummy') setTutStep(7);
+              }
+            }}>
             <View style={[ styles.pinBase, ev.isPrivate ? styles.pinPrivate : styles.pinPublic ]}>
                {ev.categoryId && (
                  <Feather name={EVENT_CATEGORIES.find(c => c.id === ev.categoryId)?.icon as any || "map-pin"} size={16} color="#fff" />
@@ -779,26 +824,7 @@ export default function MapScreen() {
       {mode === 'event_chat' && renderEventChat()}
       {mode === 'filters' && renderFilters()}
       {renderMapSearch()}
-      {tutStep === 0 && (
-        <View style={[StyleSheet.absoluteFill, {backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', zIndex: 9999}]}>
-          <Text style={{fontFamily: Typography.heading, color: '#fff', fontSize: 24, marginBottom: 15}}>Welcome to The Tribes</Text>
-          <Text style={{fontFamily: Typography.body, color: '#fff', fontSize: 16, textAlign: 'center', paddingHorizontal: 30, marginBottom: 30}}>Here you can discover local events, meet new people, and assemble your tribe.</Text>
-          <TouchableOpacity style={styles.btnPrimary} onPress={() => setTutStep(1)}>
-            <Text style={styles.btnPrimaryText}>Start Exploring</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-      {tutStep === 1 && (
-         <View style={[StyleSheet.absoluteFill, {pointerEvents: 'box-none', zIndex: 9999}]}>
-           <View style={{position: 'absolute', top: 170, right: 80, backgroundColor: '#fff', padding: 20, borderRadius: 20, maxWidth: 250, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 20, elevation: 15}}>
-              <Text style={{fontFamily: Typography.bodySemibold, marginBottom: 10}}>Find any location seamlessly</Text>
-              <Text style={{fontFamily: Typography.body, color: '#666', marginBottom: 15}}>Use the search button here to fly to any city in the world, or the center button above to return home.</Text>
-              <TouchableOpacity style={[styles.btnPrimary, {alignSelf: 'flex-end', paddingVertical: 10}]} onPress={() => setTutStep(4)}>
-                <Text style={styles.btnPrimaryText}>Got it!</Text>
-              </TouchableOpacity>
-           </View>
-         </View>
-      )}
+      {renderTutorial()}
     </View>
   );
 }

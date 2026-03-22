@@ -10,6 +10,7 @@ export interface TribeVent {
   categoryId?: string;
   categorySub?: string[];
   ageGroup?: string;
+  gender?: string;
   participantLimit: number;
   isPrivate: boolean;
   tokenCost: number;
@@ -42,7 +43,7 @@ export function useEvents() {
     return unsubscribe;
   }, []);
 
-  const createEvent = async (title: string, categoryId: string, categorySub: string[], participantLimit: number, isPrivate: boolean, tokenCost: number, location: any, date: Date, ageGroup: string = 'All Ages') => {
+  const createEvent = async (title: string, categoryId: string, categorySub: string[], participantLimit: number, isPrivate: boolean, tokenCost: number, location: any, date: Date, ageGroup: string = 'All Ages', gender: string = 'Anyone') => {
     const user = auth.currentUser;
     if (!user) throw new Error("Not logged in");
 
@@ -59,6 +60,7 @@ export function useEvents() {
       categoryId,
       categorySub,
       ageGroup,
+      gender,
       participantLimit,
       isPrivate,
       tokenCost,

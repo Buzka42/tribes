@@ -23,14 +23,16 @@ export default function MapScreen() {
   const { events, joinEvent, createEvent, deleteEvent } = useEvents();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   
-  const [mode, setMode] = useState<'map' | 'wizard_details' | 'wizard_location' | 'event_chat' | 'filters'>('map');
-  const [draft, setDraft] = useState({ title: '', categoryId: '' as CategoryGroupId | '', categorySub: [] as string[], isPrivate: false, limit: '10', location: null as any, address: '', date: null as Date | null, ageGroup: 'All Ages' });
+  const [mode, setMode] = useState<'map' | 'wizard_details' | 'wizard_location' | 'event_chat' | 'filters' | 'search_map'>('map');
+  const [draft, setDraft] = useState({ title: '', categoryId: '' as CategoryGroupId | '', categorySub: [] as string[], isPrivate: false, limit: '10', location: null as any, address: '', date: null as Date | null, ageGroup: 'All Ages', gender: 'Anyone' });
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [activeFilters, setActiveFilters] = useState<Record<string, string[]>>({});
   const [expandedCat, setExpandedCat] = useState<string | null>(null);
   const [activeAgeFilters, setActiveAgeFilters] = useState<string[]>([]);
   const [expandedAge, setExpandedAge] = useState(false);
+  const [activeGenderFilters, setActiveGenderFilters] = useState<string[]>([]);
+  const [expandedGender, setExpandedGender] = useState(false);
 
   const toggleCategory = (catId: string) => {
     const newFilters = {...activeFilters};
@@ -80,6 +82,7 @@ export default function MapScreen() {
     categoryId: 'outdoor',
     categorySub: ['Hiking'],
     ageGroup: 'All Ages',
+    gender: 'Anyone',
     description: 'A simulation event to learn how joining works. Your Leaves will be instantly refunded since this is a test!',
     location: { 
       latitude: (user?.homeLocation?.latitude || 50.2649) + 0.003, 
@@ -95,6 +98,9 @@ export default function MapScreen() {
   let displayFilterEvents = tutStep === 4 ? [...events, dummyEvent] : events;
   if (activeAgeFilters.length > 0) {
     displayFilterEvents = displayFilterEvents.filter(e => e.ageGroup && activeAgeFilters.includes(e.ageGroup));
+  }
+  if (activeGenderFilters.length > 0) {
+    displayFilterEvents = displayFilterEvents.filter(e => e.gender && activeGenderFilters.includes(e.gender));
   }
   if (Object.keys(activeFilters).length > 0) {
     displayFilterEvents = displayFilterEvents.filter(e => {
@@ -155,7 +161,7 @@ export default function MapScreen() {
         address: draft.address || "Pinned carefully on Map"
       }, draft.date, draft.ageGroup);
       setMode('map');
-      setDraft({ title: '', categoryId: '', categorySub: [], isPrivate: false, limit: '10', location: null, address: '', date: null, ageGroup: 'All Ages' });
+      setDraft({ title: '', categoryId: '', categorySub: [], isPrivate: false, limit: '10', location: null, address: '', date: null, ageGroup: 'All Ages', gender: 'Anyone' });
       Alert.alert("Tribe Assembled", "Your event is live. 5 Leaves were locked.");
     } catch(err: any) { Alert.alert("Error", err.message); }
   };
@@ -294,6 +300,15 @@ export default function MapScreen() {
           </BlurView>
         </TouchableOpacity>
 
+        <TouchableOpacity style={[styles.locateBtn, {top: 170}]} onPress={() => {
+          setMode('search_map');
+          if (tutStep === 1) setTutStep(4);
+        }}>
+          <BlurView intensity={65} tint="light" style={[styles.iconWrapper, tutStep === 1 && {borderColor: Colors.primary, borderWidth: 2}]}>
+            <Feather name="search" size={18} color={tutStep === 1 ? Colors.primary : Colors.text} />
+          </BlurView>
+        </TouchableOpacity>
+
         <View style={styles.topLeft} pointerEvents="box-none">
           <BlurView intensity={70} tint="light" style={styles.balancePill}>
             <Text style={styles.balanceText}>{user?.tokens} <Image source={require('../assets/leaf.png')} style={styles.inlineIcon} /></Text>
@@ -344,11 +359,57 @@ export default function MapScreen() {
           </BlurView>
 
           <TouchableOpacity style={styles.filterBtn} onPress={() => setMode('filters')}>
-            <BlurView intensity={70} tint="light" style={[styles.filterBtnWrapper, Object.keys(activeFilters).length + activeAgeFilters.length > 0 && {backgroundColor: Colors.primary, borderColor: Colors.primary}]}>
-              <Text style={[styles.filterBtnText, Object.keys(activeFilters).length + activeAgeFilters.length > 0 && {color: '#fff'}]}>Filters {Object.keys(activeFilters).length + activeAgeFilters.length > 0 ? `(${Object.keys(activeFilters).length + activeAgeFilters.length})` : '☰'}</Text>
+            <BlurView intensity={70} tint="light" style={[styles.filterBtnWrapper, Object.keys(activeFilters).length + activeAgeFilters.length + activeGenderFilters.length > 0 && {backgroundColor: Colors.primary, borderColor: Colors.primary}]}>
+              <Text style={[styles.filterBtnText, Object.keys(activeFilters).length + activeAgeFilters.length + activeGenderFilters.length > 0 && {color: '#fff'}]}>Filters {Object.keys(activeFilters).length + activeAgeFilters.length + activeGenderFilters.length > 0 ? `(${Object.keys(activeFilters).length + activeAgeFilters.length + activeGenderFilters.length})` : '☰'}</Text>
             </BlurView>
           </TouchableOpacity>
         </View>
+      </View>
+    );
+  };
+
+  const renderMapSearch = () => {
+    if (mode !== 'search_map') return null;
+    return (
+      <View style={{position: 'absolute', top: 50, left: 20, right: 20, zIndex: 1000}}>
+        <BlurView intensity={90} tint="light" style={{padding: 15, borderRadius: 24, overflow: 'hidden'}}>
+          <View style={{flexDirection: 'row', alignItems: 'center'}}>
+            <TextInput 
+              style={[styles.input, {flex: 1, marginBottom: 0, paddingVertical: 12, marginRight: 10}]} 
+              placeholder="Search city, neighborhood..." 
+              placeholderTextColor="#999" 
+              autoFocus
+              value={wizardQuery} 
+              onChangeText={searchWizardLocation} 
+            />
+            <TouchableOpacity onPress={() => {setMode('map'); setWizardQuery(''); setWizardSuggestions([]);}} style={{padding: 8}}>
+              <Feather name="x" size={24} color={Colors.text} />
+            </TouchableOpacity>
+          </View>
+          {wizardSuggestions.length > 0 && (
+            <View style={{marginTop: 10}}>
+              {wizardSuggestions.slice(0, 4).map((feat, i) => (
+                <TouchableOpacity 
+                  key={i} 
+                  style={{paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.05)'}}
+                  onPress={() => {
+                     const [lng, lat] = feat.center;
+                     cameraRef.current?.setCamera({
+                         centerCoordinate: [lng, lat],
+                         zoomLevel: 12.5,
+                         animationDuration: 1000
+                     });
+                     setMode('map');
+                     setWizardQuery('');
+                     setWizardSuggestions([]);
+                  }}
+                >
+                  <Text style={{fontFamily: Typography.bodySemibold, fontSize: 14}}>{feat.place_name}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+        </BlurView>
       </View>
     );
   };
@@ -381,11 +442,11 @@ export default function MapScreen() {
                         if (subs.includes(sub)) {
                             setDraft({...draft, categorySub: subs.filter(s => s !== sub)});
                         } else {
-                            if (subs.length < 3) {
+                            if (subs.length < 5) {
                                 setDraft({...draft, categorySub: [...subs, sub]});
                             } else {
-                                if (Platform.OS === 'web') window.alert('You can select up to 3 subcategories.');
-                                else Alert.alert('Limit Reached', 'You can select up to 3 subcategories.');
+                                if (Platform.OS === 'web') window.alert('You can select up to 5 subcategories.');
+                                else Alert.alert('Limit Reached', 'You can select up to 5 subcategories.');
                             }
                         }
                     }}
@@ -402,6 +463,15 @@ export default function MapScreen() {
            {['All Ages', 'Under 18', '18-25', '26-35', '36-45', '45+'].map(age => (
               <TouchableOpacity key={age} style={[styles.wizardSubCat, draft.ageGroup === age && {backgroundColor: Colors.primary, borderColor: Colors.primary}]} onPress={() => setDraft({...draft, ageGroup: age})}>
                 <Text style={[styles.wizardSubCatText, draft.ageGroup === age && {color: '#fff'}]}>{age}</Text>
+              </TouchableOpacity>
+           ))}
+        </ScrollView>
+
+        <Text style={{fontFamily: Typography.bodySemibold, color: Colors.text, marginBottom: 5, marginTop: 10, alignSelf: 'flex-start', marginLeft: '4%'}}>Target Gender (Optional)</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{marginBottom: 20}}>
+           {['Anyone', 'Male', 'Female', 'LGBTQIA+'].map(gender => (
+              <TouchableOpacity key={gender} style={[styles.wizardSubCat, draft.gender === gender && {backgroundColor: Colors.primary, borderColor: Colors.primary}]} onPress={() => setDraft({...draft, gender})}>
+                <Text style={[styles.wizardSubCatText, draft.gender === gender && {color: '#fff'}]}>{gender}</Text>
               </TouchableOpacity>
            ))}
         </ScrollView>
@@ -648,6 +718,46 @@ export default function MapScreen() {
                    </View>
                  )}
                </View>
+
+               <View style={{marginBottom: 10}}>
+                 <View style={{flexDirection: 'row', alignItems: 'center'}}>
+                   <TouchableOpacity 
+                     style={[styles.filterCard, {flex: 1, marginRight: 10}, activeGenderFilters.length > 0 && [styles.filterCardActive, {backgroundColor: '#FF9800', borderColor: '#FF9800'}]]}
+                     onPress={() => {
+                        if (activeGenderFilters.length > 0) setActiveGenderFilters([]);
+                        else setExpandedGender(!expandedGender);
+                     }}
+                   >
+                     <Feather name="heart" size={20} color={activeGenderFilters.length > 0 ? '#fff' : '#FF9800'} />
+                     <Text style={[styles.filterCardText, activeGenderFilters.length > 0 ? {color: '#fff'} : {color: Colors.text}]}>Target Gender {activeGenderFilters.length > 0 ? `(${activeGenderFilters.length})` : ''}</Text>
+                   </TouchableOpacity>
+                   <TouchableOpacity 
+                     style={{padding: 15, backgroundColor: 'rgba(255,255,255,0.5)', borderRadius: 16}} 
+                     onPress={() => setExpandedGender(!expandedGender)}
+                   >
+                     <Feather name={expandedGender ? "chevron-up" : "chevron-down"} size={20} color={Colors.text} />
+                   </TouchableOpacity>
+                 </View>
+                 {expandedGender && (
+                   <View style={{flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10, paddingLeft: 10}}>
+                     {['Anyone', 'Male', 'Female', 'LGBTQIA+'].map(gender => {
+                       const isSubActive = activeGenderFilters.includes(gender);
+                       return (
+                         <TouchableOpacity 
+                           key={gender}
+                           style={[styles.wizardSubCat, isSubActive && {backgroundColor: '#FF9800', borderColor: '#FF9800'}]}
+                           onPress={() => {
+                             if (isSubActive) setActiveGenderFilters(activeGenderFilters.filter(a => a !== gender));
+                             else setActiveGenderFilters([...activeGenderFilters, gender]);
+                           }}
+                         >
+                           <Text style={[styles.wizardSubCatText, isSubActive && {color: '#fff'}]}>{gender}</Text>
+                         </TouchableOpacity>
+                       )
+                     })}
+                   </View>
+                 )}
+               </View>
         </ScrollView>
       </BlurView>
     </View>
@@ -698,7 +808,27 @@ export default function MapScreen() {
       {mode === 'wizard_location' && renderWizardLocation()}
       {mode === 'event_chat' && renderEventChat()}
       {mode === 'filters' && renderFilters()}
-      {renderTutorial()}
+      {renderMapSearch()}
+      {tutStep === 0 && (
+        <View style={[StyleSheet.absoluteFill, {backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', zIndex: 9999}]}>
+          <Text style={{fontFamily: Typography.heading, color: '#fff', fontSize: 24, marginBottom: 15}}>Welcome to The Tribes</Text>
+          <Text style={{fontFamily: Typography.body, color: '#fff', fontSize: 16, textAlign: 'center', paddingHorizontal: 30, marginBottom: 30}}>Here you can discover local events, meet new people, and assemble your tribe.</Text>
+          <TouchableOpacity style={styles.btnPrimary} onPress={() => setTutStep(1)}>
+            <Text style={styles.btnPrimaryText}>Start Exploring</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+      {tutStep === 1 && (
+         <View style={[StyleSheet.absoluteFill, {pointerEvents: 'box-none', zIndex: 9999}]}>
+           <View style={{position: 'absolute', top: 170, right: 80, backgroundColor: '#fff', padding: 20, borderRadius: 20, maxWidth: 250, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 20, elevation: 15}}>
+              <Text style={{fontFamily: Typography.bodySemibold, marginBottom: 10}}>Find any location seamlessly</Text>
+              <Text style={{fontFamily: Typography.body, color: '#666', marginBottom: 15}}>Use the search button here to fly to any city in the world, or the center button above to return home.</Text>
+              <TouchableOpacity style={[styles.btnPrimary, {alignSelf: 'flex-end', paddingVertical: 10}]} onPress={() => setTutStep(4)}>
+                <Text style={styles.btnPrimaryText}>Got it!</Text>
+              </TouchableOpacity>
+           </View>
+         </View>
+      )}
     </View>
   );
 }

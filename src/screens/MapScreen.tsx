@@ -24,11 +24,13 @@ export default function MapScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   
   const [mode, setMode] = useState<'map' | 'wizard_details' | 'wizard_location' | 'event_chat' | 'filters'>('map');
-  const [draft, setDraft] = useState({ title: '', categoryId: '' as CategoryGroupId | '', categorySub: [] as string[], isPrivate: false, limit: '10', location: null as any, address: '', date: null as Date | null });
+  const [draft, setDraft] = useState({ title: '', categoryId: '' as CategoryGroupId | '', categorySub: [] as string[], isPrivate: false, limit: '10', location: null as any, address: '', date: null as Date | null, ageGroup: 'All Ages' });
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [activeFilters, setActiveFilters] = useState<Record<string, string[]>>({});
   const [expandedCat, setExpandedCat] = useState<string | null>(null);
+  const [activeAgeFilters, setActiveAgeFilters] = useState<string[]>([]);
+  const [expandedAge, setExpandedAge] = useState(false);
 
   const toggleCategory = (catId: string) => {
     const newFilters = {...activeFilters};
@@ -77,6 +79,7 @@ export default function MapScreen() {
     interest: 'Hiking',
     categoryId: 'outdoor',
     categorySub: ['Hiking'],
+    ageGroup: 'All Ages',
     description: 'A simulation event to learn how joining works. Your Leaves will be instantly refunded since this is a test!',
     location: { 
       latitude: (user?.homeLocation?.latitude || 50.2649) + 0.003, 
@@ -90,6 +93,9 @@ export default function MapScreen() {
   };
 
   let displayFilterEvents = tutStep === 4 ? [...events, dummyEvent] : events;
+  if (activeAgeFilters.length > 0) {
+    displayFilterEvents = displayFilterEvents.filter(e => e.ageGroup && activeAgeFilters.includes(e.ageGroup));
+  }
   if (Object.keys(activeFilters).length > 0) {
     displayFilterEvents = displayFilterEvents.filter(e => {
       if (!e.categoryId) return false;
@@ -147,9 +153,9 @@ export default function MapScreen() {
         latitude: draft.location.lat,
         longitude: draft.location.lng,
         address: draft.address || "Pinned carefully on Map"
-      }, draft.date);
+      }, draft.date, draft.ageGroup);
       setMode('map');
-      setDraft({ title: '', categoryId: '', categorySub: [], isPrivate: false, limit: '10', location: null, address: '', date: null });
+      setDraft({ title: '', categoryId: '', categorySub: [], isPrivate: false, limit: '10', location: null, address: '', date: null, ageGroup: 'All Ages' });
       Alert.alert("Tribe Assembled", "Your event is live. 5 Leaves were locked.");
     } catch(err: any) { Alert.alert("Error", err.message); }
   };
@@ -338,8 +344,8 @@ export default function MapScreen() {
           </BlurView>
 
           <TouchableOpacity style={styles.filterBtn} onPress={() => setMode('filters')}>
-            <BlurView intensity={70} tint="light" style={[styles.filterBtnWrapper, Object.keys(activeFilters).length > 0 && {backgroundColor: Colors.primary, borderColor: Colors.primary}]}>
-              <Text style={[styles.filterBtnText, Object.keys(activeFilters).length > 0 && {color: '#fff'}]}>Filters {Object.keys(activeFilters).length > 0 ? `(${Object.keys(activeFilters).length})` : '☰'}</Text>
+            <BlurView intensity={70} tint="light" style={[styles.filterBtnWrapper, Object.keys(activeFilters).length + activeAgeFilters.length > 0 && {backgroundColor: Colors.primary, borderColor: Colors.primary}]}>
+              <Text style={[styles.filterBtnText, Object.keys(activeFilters).length + activeAgeFilters.length > 0 && {color: '#fff'}]}>Filters {Object.keys(activeFilters).length + activeAgeFilters.length > 0 ? `(${Object.keys(activeFilters).length + activeAgeFilters.length})` : '☰'}</Text>
             </BlurView>
           </TouchableOpacity>
         </View>
@@ -390,6 +396,15 @@ export default function MapScreen() {
              })}
           </ScrollView>
         ) : null}
+
+        <Text style={{fontFamily: Typography.bodySemibold, color: Colors.text, marginBottom: 5, marginTop: draft.categoryId ? 0 : 20, alignSelf: 'flex-start', marginLeft: '4%'}}>Target Age Group (Optional)</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{marginBottom: 20}}>
+           {['All Ages', 'Under 18', '18-25', '26-35', '36-45', '45+'].map(age => (
+              <TouchableOpacity key={age} style={[styles.wizardSubCat, draft.ageGroup === age && {backgroundColor: Colors.primary, borderColor: Colors.primary}]} onPress={() => setDraft({...draft, ageGroup: age})}>
+                <Text style={[styles.wizardSubCatText, draft.ageGroup === age && {color: '#fff'}]}>{age}</Text>
+              </TouchableOpacity>
+           ))}
+        </ScrollView>
 
         <TouchableOpacity 
           style={[styles.input, {justifyContent: 'center', marginBottom: draft.date ? 15 : 20}]} 
@@ -593,6 +608,46 @@ export default function MapScreen() {
                </View>
              );
            })}
+
+               <View style={{marginBottom: 10}}>
+                 <View style={{flexDirection: 'row', alignItems: 'center'}}>
+                   <TouchableOpacity 
+                     style={[styles.filterCard, {flex: 1, marginRight: 10}, activeAgeFilters.length > 0 && [styles.filterCardActive, {backgroundColor: '#00BCD4', borderColor: '#00BCD4'}]]}
+                     onPress={() => {
+                        if (activeAgeFilters.length > 0) setActiveAgeFilters([]);
+                        else setExpandedAge(!expandedAge);
+                     }}
+                   >
+                     <Feather name="users" size={20} color={activeAgeFilters.length > 0 ? '#fff' : '#00BCD4'} />
+                     <Text style={[styles.filterCardText, activeAgeFilters.length > 0 ? {color: '#fff'} : {color: Colors.text}]}>Age Group {activeAgeFilters.length > 0 ? `(${activeAgeFilters.length})` : ''}</Text>
+                   </TouchableOpacity>
+                   <TouchableOpacity 
+                     style={{padding: 15, backgroundColor: 'rgba(255,255,255,0.5)', borderRadius: 16}} 
+                     onPress={() => setExpandedAge(!expandedAge)}
+                   >
+                     <Feather name={expandedAge ? "chevron-up" : "chevron-down"} size={20} color={Colors.text} />
+                   </TouchableOpacity>
+                 </View>
+                 {expandedAge && (
+                   <View style={{flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10, paddingLeft: 10}}>
+                     {['All Ages', 'Under 18', '18-25', '26-35', '36-45', '45+'].map(age => {
+                       const isSubActive = activeAgeFilters.includes(age);
+                       return (
+                         <TouchableOpacity 
+                           key={age}
+                           style={[styles.wizardSubCat, isSubActive && {backgroundColor: '#00BCD4', borderColor: '#00BCD4'}]}
+                           onPress={() => {
+                             if (isSubActive) setActiveAgeFilters(activeAgeFilters.filter(a => a !== age));
+                             else setActiveAgeFilters([...activeAgeFilters, age]);
+                           }}
+                         >
+                           <Text style={[styles.wizardSubCatText, isSubActive && {color: '#fff'}]}>{age}</Text>
+                         </TouchableOpacity>
+                       )
+                     })}
+                   </View>
+                 )}
+               </View>
         </ScrollView>
       </BlurView>
     </View>

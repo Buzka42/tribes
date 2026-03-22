@@ -13,6 +13,7 @@ export interface User {
   tokens: number;
   createdAt: Date;
   isDev?: boolean;
+  hasSeenTutorial?: boolean;
 }
 
 export interface Event {

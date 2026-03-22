@@ -13,8 +13,8 @@
 - `/src/types`: Interfaces for Firebase responses and component props.
 
 ## Key Features
-- **Map UI**: Features Mapbox rendering, bottom slider for date filtering, top right icon for interests filters.
-- **Event Wizard**: 3-step process (Details -> Map/Time/Privacy -> Cost Summary).
-- **Token System**: Core mechanism limiting event joining/creation to deter flaking, with a refund mechanism.
-- **Privacy Model**: Public vs Private map representations.
+- **Map UI**: Fully Map-centric Single Page Architecture (SPA). Uses Mapbox rendering with interactive custom pins. Glassmorphic dynamic bottom sheets control the primary HUD.
+- **Event Wizard**: Dynamic in-place map pin placement workflow allowing configuration (Categories/Demographics), Geocoding, and specific DateTime validations without screen transitions.
+- **Token System**: Core gamification restricting generic flaking by gating Tribal Chats behind a 1 🍃 lock and Event Curation behind 5 🍃 via real-time transactions.
+- **Privacy Model**: Public vs Private map representations modifying pin interactions and exact bounds vs general radiuses.
 - **Settings & Profiling**: `SettingsScreen` enables dynamic modifications of display name and automatic base location mapping via Mapbox API search.

@@ -143,8 +143,18 @@ export default function MapScreen() {
   };
 
   React.useEffect(() => {
-    if (user?.tokens === 10 && joinedEvents.length === 0) setTutStep(1);
-  }, [user?.tokens, joinedEvents.length]);
+    if (user && !user.hasSeenTutorial) {
+       setTutStep(1);
+    }
+  }, [user?.hasSeenTutorial]);
+
+  const markTutorialSeen = async () => {
+    if (!user) return;
+    try {
+      const { doc, updateDoc } = await import('firebase/firestore');
+      await updateDoc(doc(db, 'users', user.uid), { hasSeenTutorial: true });
+    } catch (e) {}
+  };
 
   const handleMapPress = (e: any) => {
     if (mode === 'wizard_location') {
@@ -175,6 +185,7 @@ export default function MapScreen() {
         setSelectedEvent(null);
         setMode('map');
         setTutStep(0);
+        markTutorialSeen();
       } else {
         Alert.alert(
           'Congratulations! 🌟', 
@@ -183,6 +194,7 @@ export default function MapScreen() {
             setSelectedEvent(null);
             setMode('map');
             setTutStep(0);
+            markTutorialSeen();
           }}]
         );
       }
@@ -784,8 +796,8 @@ export default function MapScreen() {
           <View style={{position: 'absolute', top: 100, left: '50%', transform: [{translateX: -150}], backgroundColor: '#fff', padding: 20, borderRadius: 20, width: 300, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 20, elevation: 15, zIndex: 9999}}>
              <Text style={{fontFamily: Typography.bodySemibold, marginBottom: 10}}>6. Tribal Fires</Text>
              <Text style={{fontFamily: Typography.body, color: '#666', marginBottom: 10}}>Active events show up as pins. Let's practice! Tap the test pin exactly at the center of the map.</Text>
-             <TouchableOpacity onPress={() => { setTutStep(7); }} style={{alignSelf: 'center', paddingVertical: 5, marginBottom: 5}}>
-                <Text style={{color: Colors.textLight, fontFamily: Typography.bodyBold}}>Skip Practice</Text>
+             <TouchableOpacity onPress={() => { setTutStep(0); markTutorialSeen(); }} style={{alignSelf: 'center', paddingVertical: 5, marginBottom: 5}}>
+                <Text style={{color: Colors.textLight, fontFamily: Typography.bodyBold}}>Skip Tutorial</Text>
              </TouchableOpacity>
              <Feather name="arrow-down" size={30} color={Colors.primary} style={{alignSelf: 'center', position: 'absolute', bottom: -30}} />
           </View>

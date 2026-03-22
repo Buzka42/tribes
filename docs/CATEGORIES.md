@@ -1,7 +1,7 @@
 # The Tribes - Event Categories Architecture
 
 ## Overview
-Tribes groups user events into top-level functional categories with corresponding UI aesthetics (icon and base color). Secondary specificity is provided by "subgroups". Events can have up to 3 subcategories assigned. All fields are formally sorted alphabetically (A-Z) in arrays.
+Tribes groups user events into top-level functional categories with corresponding UI aesthetics (icon and base color). Secondary specificity is provided by "subgroups". Events can have up to 5 subcategories assigned. All fields are formally sorted alphabetically (A-Z) in arrays. Events also contain Age Group and Gender target constraints.
 
 ## Definitions
 
@@ -40,3 +40,4 @@ Tribes groups user events into top-level functional categories with correspondin
 ## Usage Integration
 - **Map Pins**: The event's `categoryId` dynamically dictates what `Feather` icon is rendered inside map marker pin.
 - **Filters**: The filter dashboard uses Accordion arrays matching records against the `categorySub` selections. Selected groups inherit dynamic category colors resolving overlaps gracefully.
+- **Demographic Constraints**: Events feature strictly validated `ageGroup` (e.g. 18-25, 45+) and `gender` (e.g. Male, Female, LGBTQIA+) fields mapped intrinsically into map marker queries ensuring tailored tribal discovery options.

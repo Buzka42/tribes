@@ -12,6 +12,7 @@
 - `interests` (array of strings)
 - `tokens` (number)
 - `createdAt` (timestamp)
+- `hasSeenTutorial` (boolean, optional) - Tracks MVP Cold Start induction.
 
 ### 2. `events`
 - `id` (string)
@@ -19,7 +20,9 @@
 - `title` (string)
 - `interest` (string) - legacy fallback
 - `categoryId` (string) - Master Group filter (e.g. 'sports')
-- `categorySub` (array of strings) - Up to 3 selectable sub-group strings
+- `categorySub` (array of strings) - Up to 5 selectable sub-group strings
+- `ageGroup` (string) - MVP Demographic Target (e.g., 'All Ages', '18-25')
+- `gender` (string) - MVP Gender Target (e.g., 'Anyone', 'Male')
 - `location` (Geopoint / Address data)
   - `latitude` (number)
   - `longitude` (number)

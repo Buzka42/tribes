@@ -10,6 +10,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useEvents, TribeVent } from '../hooks/useEvents';
 import { auth, db } from '../config/firebase';
 import { signOut } from 'firebase/auth';
+import { doc, updateDoc } from 'firebase/firestore';
 import { Colors, Typography } from '../theme';
 import { format, isToday, isTomorrow, isWeekend, addDays, startOfWeek, endOfWeek, addWeeks } from 'date-fns';
 import { Feather } from '@expo/vector-icons';
@@ -146,14 +147,13 @@ export default function MapScreen() {
     if (user && !user.hasSeenTutorial) {
        setTutStep(1);
     }
-  }, [user?.hasSeenTutorial]);
+  }, [user?.uid, user?.hasSeenTutorial]);
 
   const markTutorialSeen = async () => {
     if (!user) return;
     try {
-      const { doc, updateDoc } = await import('firebase/firestore');
       await updateDoc(doc(db, 'users', user.uid), { hasSeenTutorial: true });
-    } catch (e) {}
+    } catch (e) { console.error('TUTORIAL MARK ERROR:', e); }
   };
 
   const handleMapPress = (e: any) => {

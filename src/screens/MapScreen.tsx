@@ -64,6 +64,7 @@ export default function MapScreen() {
   const scrollRef = React.useRef<ScrollView>(null);
   const cameraRef = React.useRef<any>(null);
   const [scrollX, setScrollX] = useState(0);
+  const [currentZoom, setCurrentZoom] = useState(13);
 
   const [wizardQuery, setWizardQuery] = useState('');
   const [wizardSuggestions, setWizardSuggestions] = useState<any[]>([]);
@@ -138,9 +139,9 @@ export default function MapScreen() {
   if (tutStep >= 6 && tutStep <= 7) displayEvents = [...displayEvents, dummyEvent];
   const joinedEvents = events.filter(e => e.participants?.includes(user?.uid || ''));
 
-  // --- CLUSTERING ---
+  // --- CLUSTERING (zoom-aware) ---
   const clusteredMarkers = React.useMemo(() => {
-    const RADIUS = 0.004;
+    const RADIUS = 0.004 * Math.pow(2, 13 - currentZoom);
     const used = new Set<string>();
     const clusters: { lat: number; lng: number; events: TribeVent[] }[] = [];
     for (const ev of displayEvents) {
@@ -157,7 +158,7 @@ export default function MapScreen() {
       clusters.push({ lat, lng, events: group });
     }
     return clusters;
-  }, [displayEvents]);
+  }, [displayEvents, currentZoom]);
 
   const handleScroll = (event: any) => {
     const { contentOffset, layoutMeasurement, contentSize } = event.nativeEvent;
@@ -868,7 +869,9 @@ export default function MapScreen() {
 
   return (
     <View style={styles.container}>
-      <Mapbox.MapView style={styles.map} logoEnabled={false} attributionEnabled={false} onPress={handleMapPress}>
+      <Mapbox.MapView style={styles.map} logoEnabled={false} attributionEnabled={false} onPress={handleMapPress}
+        onCameraChanged={(e: any) => { if (e?.properties?.zoom) setCurrentZoom(e.properties.zoom); }}
+      >
         <Mapbox.Camera zoomLevel={13} centerCoordinate={[user?.homeLocation?.longitude || 19.0238, user?.homeLocation?.latitude || 50.2649]} />
         
         {clusteredMarkers.map((cluster, ci) => {

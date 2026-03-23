@@ -847,22 +847,15 @@ export default function MapScreen() {
                 if (tutStep === 6 && ev.id === 'tutorial-dummy') setTutStep(7);
               }
             }}>
-            <Image
-              source={require('../assets/bonfire.png')}
-              style={[
-                { width: iconSize, height: iconSize, resizeMode: 'contain' },
-                Platform.select({
-                  web: {
-                    filter: `drop-shadow(0 0 ${Math.round(4 + intensity * 14)}px rgba(255, ${Math.round(160 - intensity * 120)}, 0, ${0.3 + intensity * 0.7}))`,
-                  } as any,
-                  default: {
-                    shadowColor: `rgb(255, ${Math.round(160 - intensity * 120)}, 0)`,
-                    shadowOpacity: 0.3 + intensity * 0.6,
-                    shadowRadius: 4 + intensity * 12,
-                    shadowOffset: { width: 0, height: 0 },
-                  },
-                }),
-              ]}
+            <img
+              src={require('../assets/bonfire.png')}
+              style={{
+                width: iconSize,
+                height: iconSize,
+                objectFit: 'contain',
+                display: 'block',
+                filter: `drop-shadow(0 0 ${Math.round(4 + intensity * 14)}px rgba(255, ${Math.round(160 - intensity * 120)}, 0, ${0.3 + intensity * 0.7}))`,
+              }}
             />
           </Marker>
           );

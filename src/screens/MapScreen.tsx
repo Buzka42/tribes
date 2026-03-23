@@ -56,7 +56,7 @@ export default function MapScreen() {
   };
   const [selectedEvent, setSelectedEvent] = useState<TribeVent | null>(null);
   const [dateFilter, setDateFilter] = useState('30 Days');
-  const [tutStep, setTutStep] = useState(0);
+  const [tutStep, setTutStep] = useState(-1);
 
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
@@ -145,28 +145,15 @@ export default function MapScreen() {
   };
 
   React.useEffect(() => {
-    let mounted = true;
-    const checkTutorial = async () => {
-      // 1. Immediately kill if valid db parameter is detected
-      if (user?.hasSeenTutorial === true) return;
-      
-      // 2. Kill if local storage explicitly holds the seal
-      if (user?.uid) {
-        const val = await AsyncStorage.getItem(`@tut_seen_${user.uid}`);
-        if (val === 'true') return;
-      }
-      
-      // 3. If neither Firebase nor Local Storage claims it was seen, trigger.
-      if (mounted && user) {
-        setTutStep(1);
-      }
-    };
-    checkTutorial();
-    return () => { mounted = false; };
-  }, [user?.hasSeenTutorial, user?.uid]);
+    if (!user) return;
+    if (user.hasSeenTutorial) return;
+    // User exists but hasn't seen tutorial => show welcome
+    setTutStep(0);
+  }, [user?.uid, user?.hasSeenTutorial]);
 
   const markTutorialSeen = async () => {
     if (!user) return;
+    setTutStep(-1);
     try {
       await AsyncStorage.setItem(`@tut_seen_${user.uid}`, 'true');
       await updateDoc(doc(db, 'users', user.uid), { hasSeenTutorial: true });
@@ -201,7 +188,7 @@ export default function MapScreen() {
         window.alert('Congratulations! 🌟\n\nYou successfully joined your first event! Since this is a test simulation, your 1 Leaf 🍃 has been instantly refunded. Welcome to The Tribes!');
         setSelectedEvent(null);
         setMode('map');
-        setTutStep(0);
+        setTutStep(-1);
         markTutorialSeen();
       } else {
         Alert.alert(
@@ -210,7 +197,7 @@ export default function MapScreen() {
           [{ text: 'Awesome!', onPress: () => {
             setSelectedEvent(null);
             setMode('map');
-            setTutStep(0);
+            setTutStep(-1);
             markTutorialSeen();
           }}]
         );
@@ -813,7 +800,7 @@ export default function MapScreen() {
           <View style={{position: 'absolute', top: 100, left: '50%', transform: [{translateX: -150}], backgroundColor: '#fff', padding: 20, borderRadius: 20, width: 300, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 20, elevation: 15, zIndex: 9999}}>
              <Text style={{fontFamily: Typography.bodySemibold, marginBottom: 10}}>6. Tribal Fires</Text>
              <Text style={{fontFamily: Typography.body, color: '#666', marginBottom: 10}}>Active events show up as pins. Let's practice! Tap the test pin exactly at the center of the map.</Text>
-             <TouchableOpacity onPress={() => { setTutStep(0); markTutorialSeen(); }} style={{alignSelf: 'center', paddingVertical: 5, marginBottom: 5}}>
+             <TouchableOpacity onPress={() => markTutorialSeen()} style={{alignSelf: 'center', paddingVertical: 5, marginBottom: 5}}>
                 <Text style={{color: Colors.textLight, fontFamily: Typography.bodyBold}}>Skip Tutorial</Text>
              </TouchableOpacity>
              <Feather name="arrow-down" size={30} color={Colors.primary} style={{alignSelf: 'center', position: 'absolute', bottom: -30}} />

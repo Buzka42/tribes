@@ -873,7 +873,7 @@ export default function MapScreen() {
               <View style={{
                 position: 'absolute',
                 width: glowSize, height: glowSize, borderRadius: glowSize / 2,
-                backgroundColor: glowColor,
+                backgroundColor: 'transparent',
                 shadowColor: `rgb(255, ${Math.round(160 - intensity * 120)}, 0)`,
                 shadowOpacity: glowOpacity,
                 shadowRadius: 8 + intensity * 12,

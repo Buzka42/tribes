@@ -847,24 +847,23 @@ export default function MapScreen() {
                 if (tutStep === 6 && ev.id === 'tutorial-dummy') setTutStep(7);
               }
             }}>
-            {/* Outer container - transparent, sized to icon */}
-            <View style={{ width: iconSize, height: iconSize, alignItems: 'center', justifyContent: 'center' }}>
-              {/* Glow circle - sits behind the image via absolute positioning */}
-              <View style={{
-                position: 'absolute',
-                width: glowSize, height: glowSize, borderRadius: glowSize / 2,
-                backgroundColor: 'transparent',
-                shadowColor: `rgb(255, ${Math.round(160 - intensity * 120)}, 0)`,
-                shadowOpacity: glowOpacity,
-                shadowRadius: 8 + intensity * 12,
-                shadowOffset: { width: 0, height: 0 },
-              }} />
-              {/* Bonfire PNG - on top of glow */}
-              <Image
-                source={require('../assets/bonfire.png')}
-                style={{ width: iconSize, height: iconSize, resizeMode: 'contain' }}
-              />
-            </View>
+            <Image
+              source={require('../assets/bonfire.png')}
+              style={[
+                { width: iconSize, height: iconSize, resizeMode: 'contain' },
+                Platform.select({
+                  web: {
+                    filter: `drop-shadow(0 0 ${Math.round(4 + intensity * 14)}px rgba(255, ${Math.round(160 - intensity * 120)}, 0, ${0.3 + intensity * 0.7}))`,
+                  } as any,
+                  default: {
+                    shadowColor: `rgb(255, ${Math.round(160 - intensity * 120)}, 0)`,
+                    shadowOpacity: 0.3 + intensity * 0.6,
+                    shadowRadius: 4 + intensity * 12,
+                    shadowOffset: { width: 0, height: 0 },
+                  },
+                }),
+              ]}
+            />
           </Marker>
           );
         })}

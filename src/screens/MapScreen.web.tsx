@@ -14,6 +14,7 @@ import { Colors, Typography } from '../theme';
 import { format, isToday, isTomorrow, isWeekend, addDays, startOfWeek, endOfWeek, addWeeks } from 'date-fns';
 import { Feather } from '@expo/vector-icons';
 import { EVENT_CATEGORIES, CategoryGroupId } from '../data/categories';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import Map, { Marker, Layer, Source, MapMouseEvent } from 'react-map-gl/mapbox';
 import 'mapbox-gl/dist/mapbox-gl.css';
@@ -140,14 +141,30 @@ export default function MapScreen() {
   };
 
   React.useEffect(() => {
-    if (user && !user.hasSeenTutorial) {
-       setTutStep(1);
-    }
-  }, [user?.uid, user?.hasSeenTutorial]);
+    let mounted = true;
+    const checkTutorial = async () => {
+      // 1. Immediately kill if valid db parameter is detected
+      if (user?.hasSeenTutorial === true) return;
+      
+      // 2. Kill if local storage explicitly holds the seal
+      if (user?.uid) {
+        const val = await AsyncStorage.getItem(`@tut_seen_${user.uid}`);
+        if (val === 'true') return;
+      }
+      
+      // 3. If neither Firebase nor Local Storage claims it was seen, trigger.
+      if (mounted && user) {
+        setTutStep(1);
+      }
+    };
+    checkTutorial();
+    return () => { mounted = false; };
+  }, [user?.hasSeenTutorial, user?.uid]);
 
   const markTutorialSeen = async () => {
     if (!user) return;
     try {
+      await AsyncStorage.setItem(`@tut_seen_${user.uid}`, 'true');
       await updateDoc(doc(db, 'users', user.uid), { hasSeenTutorial: true });
     } catch (e) { console.error('TUTORIAL MARK ERROR:', e); }
   };

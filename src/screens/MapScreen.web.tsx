@@ -796,6 +796,34 @@ export default function MapScreen() {
   };
 
 
+  // Bonfire intensity: 0 = distant (>24h), 1 = happening NOW
+  const getBonfireIntensity = (eventTime: any): number => {
+    if (!eventTime) return 0.3;
+    const now = Date.now();
+    const t = new Date(eventTime).getTime();
+    const hoursUntil = (t - now) / (1000 * 60 * 60);
+    if (hoursUntil < 0) return 1;
+    if (hoursUntil >= 24) return 0.15;
+    return 1 - (hoursUntil / 24);
+  };
+
+  const getBonfireStyle = (intensity: number) => {
+    const size = 20 + intensity * 28;
+    const g = Math.round(200 - intensity * 130);
+    const b = Math.round(50 - intensity * 50);
+    const glowRadius = 3 + intensity * 15;
+    const glowOpacity = 0.2 + intensity * 0.6;
+    return {
+      width: size, height: size, borderRadius: size / 2,
+      backgroundColor: `rgb(255, ${g}, ${b})`,
+      borderWidth: 2,
+      borderColor: `rgba(255, ${Math.round(180 - intensity * 120)}, 0, ${0.6 + intensity * 0.4})`,
+      justifyContent: 'center' as const, alignItems: 'center' as const,
+      shadowColor: `rgb(255, ${Math.round(g * 0.5)}, 0)`,
+      shadowOpacity: glowOpacity, shadowRadius: glowRadius,
+      elevation: Math.round(3 + intensity * 12),
+    };
+  };
 
   return (
     <View style={styles.container}>
@@ -807,7 +835,12 @@ export default function MapScreen() {
         mapboxAccessToken={process.env.EXPO_PUBLIC_MAPBOX_KEY}
         onClick={handleMapClick}
       >
-        {displayEvents.map(ev => (
+        {displayEvents.map(ev => {
+          const intensity = getBonfireIntensity(ev.time);
+          const bonfireStyle = getBonfireStyle(intensity);
+          const fireEmoji = intensity < 0.3 ? '🪵' : intensity < 0.6 ? '🔥' : '🔥';
+          const fontSize = 10 + intensity * 14; // 10 -> 24px
+          return (
           <Marker 
             key={ev.id} longitude={ev.location.longitude} latitude={ev.location.latitude} anchor="center"
             onClick={() => {
@@ -817,13 +850,12 @@ export default function MapScreen() {
                 if (tutStep === 6 && ev.id === 'tutorial-dummy') setTutStep(7);
               }
             }}>
-            <View style={[ styles.pinBase, ev.isPrivate ? styles.pinPrivate : styles.pinPublic ]}>
-               {ev.categoryId && (
-                 <Feather name={EVENT_CATEGORIES.find(c => c.id === ev.categoryId)?.icon as any || "map-pin"} size={16} color="#fff" />
-               )}
+            <View style={bonfireStyle}>
+              <Text style={{fontSize, textAlign: 'center'}}>{fireEmoji}</Text>
             </View>
           </Marker>
-        ))}
+          );
+        })}
         {mode === 'wizard_location' && draft.location && (
           <Marker longitude={draft.location.lng} latitude={draft.location.lat} anchor="center">
             <View style={[styles.pinBase, styles.pinDraft]} />

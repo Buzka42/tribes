@@ -1,5 +1,7 @@
 # Changelog
 
+- feat: Implemented Tribes system (recurring events groups) with full member management, application flow, and chiefs broadcasting announcements
+- feat: Integrated interactive `react-native-svg` dynamic tree visualization that sprouts branches and member leaf-names based on tribe size
 - feat: Overhauled MapScreen Native and Web Tutorial Step 7 instructing users to engage the internal 'Join Tribe' action to complete the MVP Cold Start sequence.
 - fix: Rectified pointer lock issues on `onSelected` map markers allowing internal dummy-event validation mapping precisely to `tutStep === 6`.
 - chore: Realigned and fine-tuned UI bounds strictly adjusting Web (+180px) and Native (+195px) coordinates centering Step 5 `arrow-up` perfectly.

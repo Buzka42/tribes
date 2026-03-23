@@ -29,3 +29,26 @@ export interface Event {
   isExternal: boolean;
   externalUrl?: string;
 }
+
+export interface Announcement {
+  text: string;
+  authorId: string;
+  authorName: string;
+  createdAt: Date;
+}
+
+export interface Tribe {
+  id: string;
+  name: string;
+  description: string;
+  categoryId: string;
+  creatorId: string;
+  creatorName: string;
+  members: string[];
+  memberNames: Record<string, string>;
+  pendingApplicants: string[];
+  announcements: Announcement[];
+  location?: LocationData;
+  createdAt: Date;
+  isPublic: boolean;
+}

@@ -831,20 +831,16 @@ export default function MapScreen() {
   };
 
   const getBonfireStyle = (intensity: number) => {
-    const size = 20 + intensity * 28;
+    const glowRadius = 2 + intensity * 10;
+    const glowOpacity = 0.3 + intensity * 0.5;
     const g = Math.round(200 - intensity * 130);
-    const b = Math.round(50 - intensity * 50);
-    const glowRadius = 3 + intensity * 15;
-    const glowOpacity = 0.2 + intensity * 0.6;
     return {
-      width: size, height: size, borderRadius: size / 2,
-      backgroundColor: `rgb(255, ${g}, ${b})`,
-      borderWidth: 2,
-      borderColor: `rgba(255, ${Math.round(180 - intensity * 120)}, 0, ${0.6 + intensity * 0.4})`,
       justifyContent: 'center' as const, alignItems: 'center' as const,
+      backgroundColor: 'transparent',
       shadowColor: `rgb(255, ${Math.round(g * 0.5)}, 0)`,
       shadowOpacity: glowOpacity, shadowRadius: glowRadius,
-      elevation: Math.round(3 + intensity * 12),
+      shadowOffset: { width: 0, height: 0 },
+      elevation: Math.round(2 + intensity * 8),
     };
   };
 
@@ -855,9 +851,10 @@ export default function MapScreen() {
         
         {displayEvents.map(ev => {
           const intensity = getBonfireIntensity(ev.time);
-          const bonfireStyle = getBonfireStyle(intensity);
-          const fireEmoji = intensity < 0.3 ? '🪵' : intensity < 0.6 ? '🔥' : '🔥';
-          const fontSize = 10 + intensity * 14;
+          const glowSize = 12 + intensity * 20;
+          const glowOpacity = 0.15 + intensity * 0.65;
+          const iconSize = 28 + intensity * 12;
+          const glowColor = `rgba(255, ${Math.round(160 - intensity * 120)}, 0, ${glowOpacity})`;
           return (
           <Mapbox.PointAnnotation
             key={ev.id}
@@ -871,8 +868,22 @@ export default function MapScreen() {
               }
             }}
           >
-            <View style={bonfireStyle}>
-              <Text style={{fontSize, textAlign: 'center'}}>{fireEmoji}</Text>
+            <View style={{ width: iconSize, height: iconSize, alignItems: 'center', justifyContent: 'center' }}>
+              {/* Glow circle behind the PNG */}
+              <View style={{
+                position: 'absolute',
+                width: glowSize, height: glowSize, borderRadius: glowSize / 2,
+                backgroundColor: glowColor,
+                shadowColor: `rgb(255, ${Math.round(160 - intensity * 120)}, 0)`,
+                shadowOpacity: glowOpacity,
+                shadowRadius: 8 + intensity * 12,
+                shadowOffset: { width: 0, height: 0 },
+                elevation: Math.round(2 + intensity * 10),
+              }} />
+              <Image
+                source={require('../assets/bonfire.png')}
+                style={{ width: iconSize, height: iconSize, resizeMode: 'contain' }}
+              />
             </View>
           </Mapbox.PointAnnotation>
           );

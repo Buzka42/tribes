@@ -53,6 +53,7 @@ export default function MapScreen() {
   const [selectedEvent, setSelectedEvent] = useState<TribeVent | null>(null);
   const [dateFilter, setDateFilter] = useState('30 Days');
   const [tutStep, setTutStep] = useState(-1);
+  const [selectedCluster, setSelectedCluster] = useState<{lat: number, lng: number, events: TribeVent[]} | null>(null);
 
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
@@ -132,6 +133,27 @@ export default function MapScreen() {
   let displayEvents = displayFilterEvents;
   if (tutStep >= 6 && tutStep <= 7) displayEvents = [...displayEvents, dummyEvent];
   const joinedEvents = events.filter(e => e.participants?.includes(user?.uid || ''));
+
+  // --- CLUSTERING ---
+  const clusteredMarkers = React.useMemo(() => {
+    const RADIUS = 0.004; // ~400m
+    const used = new Set<string>();
+    const clusters: { lat: number; lng: number; events: TribeVent[] }[] = [];
+    for (const ev of displayEvents) {
+      if (used.has(ev.id)) continue;
+      const group: TribeVent[] = [ev];
+      used.add(ev.id);
+      for (const other of displayEvents) {
+        if (used.has(other.id)) continue;
+        const d = Math.sqrt(Math.pow(ev.location.latitude - other.location.latitude, 2) + Math.pow(ev.location.longitude - other.location.longitude, 2));
+        if (d < RADIUS) { group.push(other); used.add(other.id); }
+      }
+      const lat = group.reduce((s, e) => s + e.location.latitude, 0) / group.length;
+      const lng = group.reduce((s, e) => s + e.location.longitude, 0) / group.length;
+      clusters.push({ lat, lng, events: group });
+    }
+    return clusters;
+  }, [displayEvents]);
 
   const handleScroll = (event: any) => {
     const { contentOffset, layoutMeasurement, contentSize } = event.nativeEvent;
@@ -831,35 +853,90 @@ export default function MapScreen() {
         mapboxAccessToken={process.env.EXPO_PUBLIC_MAPBOX_KEY}
         onClick={handleMapClick}
       >
-        {displayEvents.map(ev => {
-          const intensity = getBonfireIntensity(ev.time);
-          const glowSize = 12 + intensity * 20;       // 12 -> 32px glow circle
-          const glowOpacity = 0.15 + intensity * 0.65;
-          const iconSize = 28 + intensity * 12;        // 28 -> 40px icon
-          const glowColor = `rgba(255, ${Math.round(160 - intensity * 120)}, 0, ${glowOpacity})`;
+        {clusteredMarkers.map((cluster, ci) => {
+          // Hottest event in cluster determines bonfire intensity
+          const maxIntensity = Math.max(...cluster.events.map(e => getBonfireIntensity(e.time)));
+          const isSingle = cluster.events.length === 1;
+          const iconSize = isSingle ? (28 + maxIntensity * 12) : (36 + maxIntensity * 10);
           return (
           <Marker 
-            key={ev.id} longitude={ev.location.longitude} latitude={ev.location.latitude} anchor="center"
-            onClick={() => {
-              if (mode === 'map' || tutStep === 6) {
-                setSelectedEvent(ev as any);
-                setMode('event_chat');
-                if (tutStep === 6 && ev.id === 'tutorial-dummy') setTutStep(7);
+            key={`c-${ci}`} longitude={cluster.lng} latitude={cluster.lat} anchor="center"
+            onClick={(e: any) => {
+              e.originalEvent?.stopPropagation();
+              if (isSingle) {
+                const ev = cluster.events[0];
+                if (mode === 'map' || tutStep === 6) {
+                  setSelectedEvent(ev as any);
+                  setMode('event_chat');
+                  setSelectedCluster(null);
+                  if (tutStep === 6 && ev.id === 'tutorial-dummy') setTutStep(7);
+                }
+              } else {
+                setSelectedCluster(selectedCluster?.lat === cluster.lat ? null : cluster);
               }
             }}>
-            <img
-              src={require('../assets/bonfire.png')}
-              style={{
-                width: iconSize,
-                height: iconSize,
-                objectFit: 'contain',
-                display: 'block',
-                filter: `drop-shadow(0 0 ${Math.round(4 + intensity * 14)}px rgba(255, ${Math.round(160 - intensity * 120)}, 0, ${0.3 + intensity * 0.7}))`,
-              }}
-            />
+            <div style={{ position: 'relative', cursor: 'pointer' }}>
+              <img
+                src={require('../assets/bonfire.png')}
+                style={{
+                  width: iconSize,
+                  height: iconSize,
+                  objectFit: 'contain',
+                  display: 'block',
+                  filter: `drop-shadow(0 0 ${Math.round(4 + maxIntensity * 14)}px rgba(255, ${Math.round(160 - maxIntensity * 120)}, 0, ${0.3 + maxIntensity * 0.7}))`,
+                }}
+              />
+              {!isSingle && (
+                <div style={{
+                  position: 'absolute', top: -6, right: -8,
+                  backgroundColor: '#FF5722', color: '#fff',
+                  borderRadius: 10, minWidth: 20, height: 20,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 11, fontWeight: 700, border: '2px solid #fff',
+                  boxShadow: '0 1px 4px rgba(0,0,0,0.3)',
+                  paddingInline: 4,
+                }}>
+                  {cluster.events.length}
+                </div>
+              )}
+            </div>
           </Marker>
           );
         })}
+
+        {/* Cluster popup */}
+        {selectedCluster && (
+          <Marker longitude={selectedCluster.lng} latitude={selectedCluster.lat} anchor="top" offset={[0, 8]}>
+            <div style={{
+              background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(12px)',
+              borderRadius: 14, padding: 8, minWidth: 200, maxWidth: 260,
+              boxShadow: '0 4px 20px rgba(0,0,0,0.15)', border: '1px solid rgba(0,0,0,0.06)',
+            }}>
+              {selectedCluster.events.map((ev, i) => {
+                const cat = EVENT_CATEGORIES.find(c => c.id === ev.categoryId);
+                const timeStr = ev.time ? format(new Date(ev.time), 'MMM d, HH:mm') : '';
+                return (
+                  <div key={ev.id}
+                    onClick={() => { setSelectedEvent(ev as any); setMode('event_chat'); setSelectedCluster(null); }}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 8,
+                      padding: '7px 8px', cursor: 'pointer', borderRadius: 10,
+                      borderBottom: i < selectedCluster.events.length - 1 ? '1px solid rgba(0,0,0,0.05)' : 'none',
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(0,0,0,0.04)')}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                  >
+                    <div style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: cat?.color || '#999', flexShrink: 0 }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.title}</div>
+                      <div style={{ fontSize: 11, color: '#888' }}>{timeStr}</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </Marker>
+        )}
         {mode === 'wizard_location' && draft.location && (
           <Marker longitude={draft.location.lng} latitude={draft.location.lat} anchor="center">
             <View style={[styles.pinBase, styles.pinDraft]} />

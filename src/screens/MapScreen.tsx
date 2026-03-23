@@ -57,6 +57,7 @@ export default function MapScreen() {
   const [selectedEvent, setSelectedEvent] = useState<TribeVent | null>(null);
   const [dateFilter, setDateFilter] = useState('30 Days');
   const [tutStep, setTutStep] = useState(-1);
+  const [selectedCluster, setSelectedCluster] = useState<{lat: number, lng: number, events: TribeVent[]} | null>(null);
 
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
@@ -136,6 +137,27 @@ export default function MapScreen() {
   let displayEvents = displayFilterEvents;
   if (tutStep >= 6 && tutStep <= 7) displayEvents = [...displayEvents, dummyEvent];
   const joinedEvents = events.filter(e => e.participants?.includes(user?.uid || ''));
+
+  // --- CLUSTERING ---
+  const clusteredMarkers = React.useMemo(() => {
+    const RADIUS = 0.004;
+    const used = new Set<string>();
+    const clusters: { lat: number; lng: number; events: TribeVent[] }[] = [];
+    for (const ev of displayEvents) {
+      if (used.has(ev.id)) continue;
+      const group: TribeVent[] = [ev];
+      used.add(ev.id);
+      for (const other of displayEvents) {
+        if (used.has(other.id)) continue;
+        const d = Math.sqrt(Math.pow(ev.location.latitude - other.location.latitude, 2) + Math.pow(ev.location.longitude - other.location.longitude, 2));
+        if (d < RADIUS) { group.push(other); used.add(other.id); }
+      }
+      const lat = group.reduce((s, e) => s + e.location.latitude, 0) / group.length;
+      const lng = group.reduce((s, e) => s + e.location.longitude, 0) / group.length;
+      clusters.push({ lat, lng, events: group });
+    }
+    return clusters;
+  }, [displayEvents]);
 
   const handleScroll = (event: any) => {
     const { contentOffset, layoutMeasurement, contentSize } = event.nativeEvent;
@@ -849,38 +871,71 @@ export default function MapScreen() {
       <Mapbox.MapView style={styles.map} logoEnabled={false} attributionEnabled={false} onPress={handleMapPress}>
         <Mapbox.Camera zoomLevel={13} centerCoordinate={[user?.homeLocation?.longitude || 19.0238, user?.homeLocation?.latitude || 50.2649]} />
         
-        {displayEvents.map(ev => {
-          const intensity = getBonfireIntensity(ev.time);
-          const glowSize = 12 + intensity * 20;
-          const glowOpacity = 0.15 + intensity * 0.65;
-          const iconSize = 28 + intensity * 12;
-          const glowColor = `rgba(255, ${Math.round(160 - intensity * 120)}, 0, ${glowOpacity})`;
+        {clusteredMarkers.map((cluster, ci) => {
+          const maxIntensity = Math.max(...cluster.events.map(e => getBonfireIntensity(e.time)));
+          const isSingle = cluster.events.length === 1;
+          const iconSize = isSingle ? (28 + maxIntensity * 12) : (36 + maxIntensity * 10);
           return (
           <Mapbox.PointAnnotation
-            key={ev.id}
-            id={ev.id}
-            coordinate={[ev.location.longitude, ev.location.latitude]}
+            key={`c-${ci}`}
+            id={`c-${ci}`}
+            coordinate={[cluster.lng, cluster.lat]}
             onSelected={() => {
-              if (mode === 'map' || tutStep === 6) {
-                setSelectedEvent(ev as any);
-                setMode('event_chat');
-                if (tutStep === 6 && ev.id === 'tutorial-dummy') setTutStep(7);
+              if (isSingle) {
+                const ev = cluster.events[0];
+                if (mode === 'map' || tutStep === 6) {
+                  setSelectedEvent(ev as any);
+                  setMode('event_chat');
+                  setSelectedCluster(null);
+                  if (tutStep === 6 && ev.id === 'tutorial-dummy') setTutStep(7);
+                }
+              } else {
+                setSelectedCluster(selectedCluster?.lat === cluster.lat ? null : cluster);
               }
             }}
           >
-            <Image
-              source={require('../assets/bonfire.png')}
-              style={{
-                width: iconSize, height: iconSize, resizeMode: 'contain',
-                shadowColor: `rgb(255, ${Math.round(160 - intensity * 120)}, 0)`,
-                shadowOpacity: 0.3 + intensity * 0.6,
-                shadowRadius: 4 + intensity * 12,
-                shadowOffset: { width: 0, height: 0 },
-              }}
-            />
+            <View style={{alignItems: 'center', justifyContent: 'center'}}>
+              <Image
+                source={require('../assets/bonfire.png')}
+                style={{
+                  width: iconSize, height: iconSize, resizeMode: 'contain',
+                  shadowColor: `rgb(255, ${Math.round(160 - maxIntensity * 120)}, 0)`,
+                  shadowOpacity: 0.3 + maxIntensity * 0.6,
+                  shadowRadius: 4 + maxIntensity * 12,
+                  shadowOffset: { width: 0, height: 0 },
+                }}
+              />
+              {!isSingle && (
+                <View style={{ position: 'absolute', top: -6, right: -8, backgroundColor: '#FF5722', borderRadius: 10, minWidth: 20, height: 20, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#fff', paddingHorizontal: 4 }}>
+                  <Text style={{ color: '#fff', fontSize: 11, fontFamily: Typography.bodyBold }}>{cluster.events.length}</Text>
+                </View>
+              )}
+            </View>
           </Mapbox.PointAnnotation>
           );
         })}
+
+        {/* Cluster popup */}
+        {selectedCluster && (
+          <Mapbox.PointAnnotation id="cluster-popup" coordinate={[selectedCluster.lng, selectedCluster.lat]}>
+            <View style={{ marginTop: 30, backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 14, padding: 8, minWidth: 200, maxWidth: 260, shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 20, elevation: 10, borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)' }}>
+              {selectedCluster.events.map((ev, i) => {
+                const cat = EVENT_CATEGORIES.find(c => c.id === ev.categoryId);
+                const timeStr = ev.time ? format(new Date(ev.time), 'MMM d, HH:mm') : '';
+                return (
+                  <TouchableOpacity key={ev.id} onPress={() => { setSelectedEvent(ev as any); setMode('event_chat'); setSelectedCluster(null); }}
+                    style={{ flexDirection: 'row', alignItems: 'center', padding: 7, borderBottomWidth: i < selectedCluster.events.length - 1 ? 1 : 0, borderBottomColor: 'rgba(0,0,0,0.05)' }}>
+                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: cat?.color || '#999', marginRight: 8 }} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontFamily: Typography.bodySemibold, fontSize: 13 }} numberOfLines={1}>{ev.title}</Text>
+                      <Text style={{ fontFamily: Typography.body, fontSize: 11, color: '#888' }}>{timeStr}</Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </Mapbox.PointAnnotation>
+        )}
 
         {mode === 'wizard_location' && draft.location && (
           <Mapbox.PointAnnotation

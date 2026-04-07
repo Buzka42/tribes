@@ -1,5 +1,15 @@
 # Changelog
 
+- feat: Deployed 5-Phase Lunar Rating system for dynamic post-event feedback capturing 1-5 ratings.
+- feat: Refactored Profile infrastructure shielding geographic locations and adding Age, Sex, and Bios.
+- feat: Expanded Tribe management with asynchronous invite links and real-time Chief application alerts.
+- feat: Advanced the Map UI z-index spatial hierarchy to fix dynamic component bleeds on Web.
+- feat: Iterated exact Sprite masking constraints mapping responsive portrait trims inside Web tribe buttons.
+- feat: Integrated Tribe creation solely into the end-of-event "Lock & Finalize" flow, abandoning public public hub discovery
+- feat: Deployed post-event feedback modal for attendees capturing satisfaction metrics bridging directly to dynamic token refunds
+- feat: Expanded `useEvents.ts` and UI models restricting past and finalized events from polluting the active map layer unless action is required
+- fix: Resized wizard category selections incorporating a horizontal ScrollView layout mapping `categorySub` granularities into the Tribes architecture
+- fix: Corrected CSS layout anomalies forcing overflow boundary clips upon dynamic shadow-filtered spirit and flame iconography
 - feat: Implemented Tribes system (recurring events groups) with full member management, application flow, and chiefs broadcasting announcements
 - feat: Integrated interactive `react-native-svg` dynamic tree visualization that sprouts branches and member leaf-names based on tribe size
 - feat: Overhauled MapScreen Native and Web Tutorial Step 7 instructing users to engage the internal 'Join Tribe' action to complete the MVP Cold Start sequence.

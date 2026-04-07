@@ -26,11 +26,11 @@ Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_KEY || '');
 export default function MapScreen() {
   const { user } = useAuth();
   const { events, joinEvent, createEvent, deleteEvent } = useEvents();
-  const { tribes, createTribe, applyToTribe, acceptApplicant, rejectApplicant, postAnnouncement, leaveTribe } = useTribes();
+  const { tribes, createTribe, applyToTribe, acceptApplicant, rejectApplicant, postAnnouncement, leaveTribe, removeMember, deleteTribe, updateTribe, promoteMember, demoteMember } = useTribes();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   
   const [mode, setMode] = useState<'map' | 'wizard_details' | 'wizard_location' | 'event_chat' | 'filters' | 'search_map' | 'tribe_panel'>('map');
-  const [draft, setDraft] = useState({ title: '', categoryId: '' as CategoryGroupId | '', categorySub: [] as string[], isPrivate: false, limit: '10', location: null as any, address: '', date: null as Date | null, ageGroup: 'All Ages', gender: 'Anyone' });
+  const [draft, setDraft] = useState({ title: '', categoryId: '' as CategoryGroupId | '', categorySub: [] as string[], isPrivate: false, limit: '10', location: null as any, address: '', date: null as Date | null, ageGroup: 'All Ages', gender: 'Anyone', tribeId: '', cyclicalRule: '' });
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [activeFilters, setActiveFilters] = useState<Record<string, string[]>>({});
@@ -66,6 +66,7 @@ export default function MapScreen() {
   // Tribes UI State
   const [tribeTab, setTribeTab] = useState<'my_tribes' | 'create_tribe'>('my_tribes');
   const [selectedTribe, setSelectedTribe] = useState<Tribe | null>(null);
+  const [selectedTribeTab, setSelectedTribeTab] = useState<'info' | 'events' | 'manage'>('info');
   const [tribeDraft, setTribeDraft] = useState({ name: '', description: '', categoryId: '' });
   const [announcementText, setAnnouncementText] = useState('');
 
@@ -207,9 +208,9 @@ export default function MapScreen() {
         latitude: draft.location.lat,
         longitude: draft.location.lng,
         address: draft.address || "Pinned carefully on Map"
-      }, draft.date, draft.ageGroup);
+      }, draft.date, draft.ageGroup, draft.gender, draft.tribeId || undefined, draft.cyclicalRule || undefined);
       setMode('map');
-      setDraft({ title: '', categoryId: '', categorySub: [], isPrivate: false, limit: '10', location: null, address: '', date: null, ageGroup: 'All Ages', gender: 'Anyone' });
+      setDraft({ title: '', categoryId: '', categorySub: [], isPrivate: false, limit: '10', location: null, address: '', date: null, ageGroup: 'All Ages', gender: 'Anyone', tribeId: '', cyclicalRule: '' });
       Alert.alert("Tribe Assembled", "Your event is live. 5 Leaves were locked.");
     } catch(err: any) { Alert.alert("Error", err.message); }
   };
@@ -297,17 +298,18 @@ export default function MapScreen() {
             const endY = startY - 30 - (index % 3) * 10; // Randomize height slightly
             const cpX = isLeft ? 150 - 20 : 150 + 20; // Control point
             const name = tribe.memberNames[uid] || 'User';
+            const mIsLeader = (tribe.leaders || []).includes(uid);
 
             return (
               <G key={uid}>
                 {/* Branch */}
                 <Path d={`M150 ${startY} Q ${cpX} ${startY - 10} ${endX} ${endY}`} stroke="#6B4E0A" strokeWidth={3} fill="none" />
-                {/* Leaf Background */}
-                <Circle cx={endX} cy={endY} r={12} fill={Colors.primary} />
-                <Circle cx={endX} cy={endY} r={10} fill="#8cb369" />
+                {/* Leaf Background - Silver for leaders */}
+                <Circle cx={endX} cy={endY} r={12} fill={mIsLeader ? '#95a5a6' : Colors.primary} />
+                <Circle cx={endX} cy={endY} r={10} fill={mIsLeader ? '#bdc3c7' : '#8cb369'} />
                 {/* Username label */}
                 <SvgText x={endX} y={endY + 22} fontSize="10" fill="#333" textAnchor="middle" fontWeight="bold">
-                  {name.substring(0, 8)}
+                  {mIsLeader ? '🛡️ ' : ''}{name.substring(0, 8)}
                 </SvgText>
               </G>
             );
@@ -325,89 +327,142 @@ export default function MapScreen() {
   const renderTribePanel = () => {
     if (selectedTribe) {
       const isChief = selectedTribe.creatorId === user?.uid;
+      const isLeader = isChief || (selectedTribe.leaders || []).includes(user?.uid || '');
       const isMember = selectedTribe.members.includes(user?.uid || '');
       const hasApplied = selectedTribe.pendingApplicants.includes(user?.uid || '');
 
       return (
         <View style={StyleSheet.absoluteFill}>
-          <TouchableOpacity style={StyleSheet.absoluteFill} onPress={() => { setSelectedTribe(null); setMode('map'); }} />
-          <BlurView intensity={90} tint="light" style={styles.glassWrapperBottomFull}>
-            <View style={{flexDirection: 'row', alignItems: 'center', marginBottom: 15}}>
-              <TouchableOpacity onPress={() => setSelectedTribe(null)} style={{marginRight: 15}}><Feather name="arrow-left" size={24} color={Colors.text} /></TouchableOpacity>
-              <Text style={[styles.panelTitle, {marginBottom: 0}]}>{selectedTribe.name}</Text>
+          <BlurView intensity={95} tint="light" style={StyleSheet.absoluteFill}>
+            <View style={{flexDirection: 'row', alignItems: 'center', padding: 20, paddingTop: 40, borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.05)'}}>
+              <TouchableOpacity onPress={() => { setSelectedTribe(null); setSelectedTribeTab('info'); }} style={{padding: 10, marginRight: 5}}>
+                <Feather name="arrow-left" size={26} color={Colors.text} />
+              </TouchableOpacity>
+              <Text style={[styles.panelTitle, {marginBottom: 0, flex: 1}]} numberOfLines={1}>{selectedTribe.name}</Text>
             </View>
 
-            <ScrollView contentContainerStyle={{ padding: 20 }}>
-              {/* Tree VISUALIZATION */}
-              <View style={{ backgroundColor: '#f0f5ee', borderRadius: 20, marginBottom: 20, overflow: 'hidden' }}>
-                {renderTreeSVG(selectedTribe)}
-                <View style={{ padding: 12, alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.7)' }}>
-                  <Text style={{ fontFamily: Typography.bodySemibold, color: Colors.primaryDark }}>{selectedTribe.members.length} Tribesmen</Text>
-                  <Text style={{ fontFamily: Typography.body, color: '#666', fontSize: 13, textAlign: 'center', marginTop: 4 }}>{selectedTribe.description}</Text>
-                </View>
-              </View>
+            <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.05)', backgroundColor: 'rgba(255,255,255,0.4)' }}>
+              <TouchableOpacity style={{ flex: 1, padding: 15, alignItems: 'center', borderBottomWidth: selectedTribeTab === 'info' ? 2 : 0, borderBottomColor: Colors.primary }} onPress={() => setSelectedTribeTab('info')}>
+                <Text style={{ fontFamily: Typography.heading, color: selectedTribeTab === 'info' ? Colors.primary : '#888' }}>Campfire</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={{ flex: 1, padding: 15, alignItems: 'center', borderBottomWidth: selectedTribeTab === 'events' ? 2 : 0, borderBottomColor: Colors.primary }} onPress={() => setSelectedTribeTab('events')}>
+                <Text style={{ fontFamily: Typography.heading, color: selectedTribeTab === 'events' ? Colors.primary : '#888' }}>Events</Text>
+              </TouchableOpacity>
+              {isLeader && (
+                <TouchableOpacity style={{ flex: 1, padding: 15, alignItems: 'center', borderBottomWidth: selectedTribeTab === 'manage' ? 2 : 0, borderBottomColor: Colors.primary }} onPress={() => setSelectedTribeTab('manage')}>
+                  <Text style={{ fontFamily: Typography.heading, color: selectedTribeTab === 'manage' ? Colors.primary : '#888' }}>Manage</Text>
+                </TouchableOpacity>
+              )}
+            </View>
 
-              {/* Announcements Feed */}
-              <Text style={{ fontFamily: Typography.heading, fontSize: 18, marginBottom: 12 }}>Announcements</Text>
-              {selectedTribe.announcements.length === 0 ? (
-                <Text style={{ color: '#999', fontStyle: 'italic', marginBottom: 20 }}>No signs of smoke yet.</Text>
-              ) : (
-                <View style={{ marginBottom: 20 }}>
-                  {selectedTribe.announcements.slice().reverse().map((ann, i) => (
-                    <View key={i} style={{ backgroundColor: '#fff', padding: 12, borderRadius: 12, marginBottom: 8, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 5 }}>
-                      <Text style={{ fontFamily: Typography.body, color: Colors.text }}>{ann.text}</Text>
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 }}>
-                        <Text style={{ fontSize: 11, color: '#888', fontWeight: 'bold' }}>{ann.authorName}</Text>
-                        <Text style={{ fontSize: 11, color: '#bbb' }}>{format(ann.createdAt, 'MMM d, HH:mm')}</Text>
-                      </View>
+            <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 60 }}>
+              {selectedTribeTab === 'info' && (
+                <>
+                  {/* Tree VISUALIZATION */}
+                  <View style={{ backgroundColor: '#f0f5ee', borderRadius: 20, marginBottom: 20, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)' }}>
+                    {renderTreeSVG(selectedTribe)}
+                    <View style={{ padding: 15, alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.85)' }}>
+                      <Text style={{ fontFamily: Typography.bodyBold, fontSize: 16, color: Colors.primaryDark }}>{selectedTribe.members.length} Tribesmen</Text>
+                      <Text style={{ fontFamily: Typography.body, color: '#555', fontSize: 14, textAlign: 'center', marginTop: 8, lineHeight: 20 }}>{selectedTribe.description}</Text>
                     </View>
-                  ))}
+                  </View>
+
+                  {/* Actions */}
+                  {!isMember && !hasApplied && (
+                    <TouchableOpacity style={[styles.btnPrimaryFull, {marginTop: 0, marginBottom: 20}]} onPress={async () => {
+                      await applyToTribe(selectedTribe.id);
+                      Alert.alert("Applied", "Your smoke signal was sent to the chief!");
+                    }}>
+                      <Text style={styles.btnPrimaryText}>Apply to Tribe</Text>
+                    </TouchableOpacity>
+                  )}
+                  {!isMember && hasApplied && (
+                    <View style={[styles.btnPrimaryFull, { backgroundColor: '#ccc', marginTop: 0, marginBottom: 20 }]}>
+                      <Text style={styles.btnPrimaryText}>Application Pending...</Text>
+                    </View>
+                  )}
+                  {isMember && !isChief && (
+                    <TouchableOpacity style={[styles.btnPrimaryFull, { backgroundColor: '#ff4d4f', marginTop: 0, marginBottom: 20 }]} onPress={async () => {
+                      Alert.alert("Leave Tribe", "Are you sure?", [
+                        {text: "Cancel", style: 'cancel'},
+                        {text: "Leave", style: 'destructive', onPress: async () => { await leaveTribe(selectedTribe.id); setSelectedTribe(null); setMode('map'); }}
+                      ]);
+                    }}>
+                      <Text style={styles.btnPrimaryText}>Leave Tribe</Text>
+                    </TouchableOpacity>
+                  )}
+
+                  {/* Announcements Feed */}
+                  <Text style={{ fontFamily: Typography.heading, fontSize: 18, marginBottom: 12, marginTop: 10 }}>Announcements</Text>
+                  {selectedTribe.announcements.length === 0 ? (
+                    <Text style={{ color: '#999', fontStyle: 'italic', marginBottom: 20 }}>No signs of smoke yet.</Text>
+                  ) : (
+                    <View style={{ marginBottom: 20 }}>
+                      {selectedTribe.announcements.slice().reverse().map((ann, i) => (
+                        <View key={i} style={{ backgroundColor: '#fff', padding: 16, borderRadius: 16, marginBottom: 10, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 }}>
+                          <Text style={{ fontFamily: Typography.body, color: Colors.text, fontSize: 15, lineHeight: 22 }}>{ann.text}</Text>
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.05)' }}>
+                            <Text style={{ fontSize: 12, color: Colors.primaryDark, fontWeight: 'bold' }}>{ann.authorName}</Text>
+                            <Text style={{ fontSize: 12, color: '#aaa' }}>{format(ann.createdAt, 'MMM d, HH:mm')}</Text>
+                          </View>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+                </>
+              )}
+
+              {selectedTribeTab === 'events' && (
+                <View>
+                  {isLeader && (
+                    <View style={{marginBottom: 25, padding: 20, backgroundColor: '#f0f5ee', borderRadius: 16, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)'}}>
+                      <Text style={{fontFamily: Typography.heading, fontSize: 18, color: Colors.text, marginBottom: 8}}>Create Tribe Event</Text>
+                      <Text style={{fontFamily: Typography.body, color: '#666', marginBottom: 15}}>Host an exclusive event just for the tribe, or make it cyclical so it repeats automatically!</Text>
+                      
+                      <TouchableOpacity style={styles.btnPrimaryFull} onPress={() => {
+                        setDraft({ ...draft, tribeId: selectedTribe.id, categoryId: selectedTribe.categoryId as any });
+                        setMode('wizard_details');
+                      }}>
+                        <Text style={styles.btnPrimaryText}>+ Draft Cyclical Event</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+
+                  <Text style={{ fontFamily: Typography.heading, fontSize: 18, marginBottom: 16 }}>Upcoming Tribal Gatherings</Text>
+                  {events.filter(e => e.tribeId === selectedTribe.id).length === 0 ? (
+                    <Text style={{ color: '#999', fontStyle: 'italic', padding: 20, textAlign: 'center' }}>No upcoming events scheduled for this tribe.</Text>
+                  ) : (
+                    events.filter(e => e.tribeId === selectedTribe.id).sort((a,b) => a.time.getTime() - b.time.getTime()).map(e => (
+                      <TouchableOpacity key={e.id} onPress={() => { setSelectedEvent(e); setMode('event_chat'); }} style={{
+                        backgroundColor: '#fff', padding: 16, borderRadius: 16, marginBottom: 12, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, elevation: 3
+                      }}>
+                        <View style={{flexDirection: 'row', justifyContent: 'space-between'}}>
+                          <Text style={{fontFamily: Typography.heading, fontSize: 16, color: Colors.text, flex: 1}}>{e.title}</Text>
+                          {e.cyclicalRule && <View style={{backgroundColor: Colors.primary, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12}}><Text style={{color: '#fff', fontSize: 10, fontWeight: 'bold'}}>{e.cyclicalRule.toUpperCase()}</Text></View>}
+                        </View>
+                        <Text style={{color: '#666', marginTop: 4, fontFamily: Typography.body}}>{format(e.time, 'EEEE, MMM d at h:mm a')}</Text>
+                      </TouchableOpacity>
+                    ))
+                  )}
                 </View>
               )}
 
-              {/* Actions */}
-              {!isMember && !hasApplied && (
-                <TouchableOpacity style={[styles.btnPrimaryFull, {marginTop: 0}]} onPress={async () => {
-                  await applyToTribe(selectedTribe.id);
-                  Alert.alert("Applied", "Your smoke signal was sent to the chief!");
-                  setSelectedTribe(null);
-                }}>
-                  <Text style={styles.btnPrimaryText}>Apply to Tribe</Text>
-                </TouchableOpacity>
-              )}
-              {!isMember && hasApplied && (
-                <View style={[styles.btnPrimaryFull, { backgroundColor: '#ccc', marginTop: 0 }]}>
-                  <Text style={styles.btnPrimaryText}>Application Pending...</Text>
-                </View>
-              )}
-              {isMember && !isChief && (
-                <TouchableOpacity style={[styles.btnPrimaryFull, { backgroundColor: '#ff4d4f', marginTop: 0 }]} onPress={async () => {
-                  Alert.alert("Leave Tribe", "Are you sure?", [
-                    {text: "Cancel", style: 'cancel'},
-                    {text: "Leave", style: 'destructive', onPress: async () => { await leaveTribe(selectedTribe.id); setSelectedTribe(null); setMode('map'); }}
-                  ]);
-                }}>
-                  <Text style={styles.btnPrimaryText}>Leave Tribe</Text>
-                </TouchableOpacity>
-              )}
-
-              {/* Chief Dashboard */}
-              {isChief && (
-                <View style={{ marginTop: 10, padding: 16, backgroundColor: '#fff', borderRadius: 16, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)' }}>
-                  <Text style={{ fontFamily: Typography.heading, fontSize: 16, marginBottom: 12 }}>👑 Chief Dashboard</Text>
+              {selectedTribeTab === 'manage' && isLeader && (
+                <View style={{ marginTop: 10 }}>
+                  <Text style={{ fontFamily: Typography.heading, fontSize: 22, marginBottom: 20 }}>{isChief ? '👑 Chief Dashboard' : '🛡️ Council Dashboard'}</Text>
                   
                   {selectedTribe.pendingApplicants.length > 0 && (
-                    <View style={{ marginBottom: 16 }}>
-                      <Text style={{ fontWeight: 'bold', marginBottom: 8, color: '#e67e22' }}>{selectedTribe.pendingApplicants.length} Pending Applications</Text>
+                    <View style={{ marginBottom: 24, backgroundColor: '#fff', padding: 16, borderRadius: 16, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8 }}>
+                      <Text style={{ fontFamily: Typography.heading, fontSize: 16, marginBottom: 12, color: '#e67e22' }}>{selectedTribe.pendingApplicants.length} Pending Applications</Text>
                       {selectedTribe.pendingApplicants.map(appUid => (
-                        <View key={appUid} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f9f9f9', padding: 8, borderRadius: 8, marginBottom: 4 }}>
-                          <Text style={{ fontSize: 13 }}>UID: {appUid.substring(0,5)}...</Text>
-                          <View style={{ flexDirection: 'row', gap: 6 }}>
-                            <TouchableOpacity onPress={() => rejectApplicant(selectedTribe.id, appUid)} style={{ backgroundColor: '#ff4d4f', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6 }}>
-                              <Text style={{ color: '#fff', fontSize: 11, fontWeight: 'bold' }}>Reject</Text>
+                        <View key={appUid} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f9f9f9', padding: 12, borderRadius: 12, marginBottom: 8, borderWidth: 1, borderColor: '#eee' }}>
+                          <Text style={{ fontSize: 14, fontFamily: Typography.bodySemibold }}>User {appUid.substring(0,5)}...</Text>
+                          <View style={{ flexDirection: 'row', gap: 8 }}>
+                            <TouchableOpacity onPress={() => rejectApplicant(selectedTribe.id, appUid)} style={{ backgroundColor: '#ff4d4f', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8 }}>
+                              <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>Reject</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity onPress={() => acceptApplicant(selectedTribe.id, appUid)} style={{ backgroundColor: Colors.primary, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6 }}>
-                              <Text style={{ color: '#fff', fontSize: 11, fontWeight: 'bold' }}>Accept</Text>
+                            <TouchableOpacity onPress={() => acceptApplicant(selectedTribe.id, appUid)} style={{ backgroundColor: Colors.primary, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8 }}>
+                              <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>Accept</Text>
                             </TouchableOpacity>
                           </View>
                         </View>
@@ -415,20 +470,82 @@ export default function MapScreen() {
                     </View>
                   )}
 
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10 }}>
+                  <View style={{ backgroundColor: '#fff', padding: 16, borderRadius: 16, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, marginBottom: 24 }}>
+                    <Text style={{ fontFamily: Typography.heading, fontSize: 16, marginBottom: 12 }}>Broadcast Smoke Signal</Text>
                     <TextInput 
-                      style={{ flex: 1, backgroundColor: '#f5f5f5', borderRadius: 8, padding: 10, fontSize: 14 }} 
-                      placeholder="Post a smoke signal..." 
+                      style={{ backgroundColor: '#f5f5f5', borderRadius: 12, padding: 16, fontSize: 15, fontFamily: Typography.body, textAlignVertical: 'top', height: 100 }} 
+                      placeholder="Write an announcement to your tribe..." 
+                      multiline
                       value={announcementText} onChangeText={setAnnouncementText}
                     />
                     <TouchableOpacity onPress={async () => {
                       if (!announcementText.trim()) return;
                       await postAnnouncement(selectedTribe.id, announcementText);
                       setAnnouncementText('');
-                    }} style={{ backgroundColor: Colors.primary, padding: 10, borderRadius: 8 }}>
-                      <Feather name="send" size={16} color="#fff" />
+                      setSelectedTribeTab('info');
+                    }} style={[styles.btnPrimaryFull, { marginTop: 12 }]}>
+                      <Text style={styles.btnPrimaryText}>Send Announcement</Text>
                     </TouchableOpacity>
                   </View>
+
+                  <Text style={{ fontFamily: Typography.heading, fontSize: 18, marginBottom: 12 }}>Manage Members ({selectedTribe.members.length})</Text>
+                  <View style={{ backgroundColor: '#fff', borderRadius: 16, overflow: 'hidden', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, marginBottom: 24 }}>
+                    {selectedTribe.members.map((mUid, idx) => {
+                      const mIsLeader = selectedTribe.creatorId === mUid || (selectedTribe.leaders || []).includes(mUid);
+                      const mIsChief = selectedTribe.creatorId === mUid;
+                      return (
+                      <View key={mUid} style={{ flexDirection: 'row', alignItems: 'center', padding: 15, borderBottomWidth: idx === selectedTribe.members.length - 1 ? 0 : 1, borderTopColor: '#f0f0f0' }}>
+                        <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: mIsChief ? '#f1c40f' : (mIsLeader ? '#95a5a6' : Colors.primary), justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+                          <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 14 }}>{selectedTribe.memberNames[mUid]?.charAt(0) || '?'}</Text>
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontFamily: Typography.bodySemibold }}>{selectedTribe.memberNames[mUid] || 'Unknown Member'}</Text>
+                          {mIsChief ? (
+                            <Text style={{ fontSize: 10, color: '#f1c40f', fontWeight: 'bold' }}>Tribe Chief</Text>
+                          ) : mIsLeader ? (
+                             <Text style={{ fontSize: 10, color: '#95a5a6', fontWeight: 'bold' }}>Tribe Leader</Text>
+                          ) : null}
+                        </View>
+                        
+                        <View style={{ flexDirection: 'row', gap: 5 }}>
+                          {isChief && !mIsChief && (
+                            <TouchableOpacity onPress={() => {
+                               if (mIsLeader) demoteMember(selectedTribe.id, mUid);
+                               else promoteMember(selectedTribe.id, mUid);
+                            }} style={{ padding: 8 }}>
+                               <Feather name={mIsLeader ? "shield-off" : "shield"} size={18} color={mIsLeader ? "#666" : Colors.primary} />
+                            </TouchableOpacity>
+                          )}
+                          {!mIsChief && (isChief || (isLeader && !mIsLeader)) && (
+                            <TouchableOpacity onPress={() => {
+                              Alert.alert("Remove Member", `Are you sure you want to remove ${selectedTribe.memberNames[mUid]}?`, [
+                                { text: "Cancel", style: "cancel" },
+                                { text: "Remove", style: "destructive", onPress: () => removeMember(selectedTribe.id, mUid) }
+                              ]);
+                            }} style={{ padding: 8 }}>
+                              <Feather name="user-x" size={18} color="#ff4d4f" />
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                      </View>
+                      );
+                    })}
+                  </View>
+
+                  {isChief && (
+                    <TouchableOpacity onPress={() => {
+                      Alert.alert("Delete Tribe", "DANGER: This will permanently dissolve the tribe. All members will be scattered. Continue?", [
+                        { text: "Cancel", style: "cancel" },
+                        { text: "DISSOLVE TRIBE", style: "destructive", onPress: async () => {
+                            await deleteTribe(selectedTribe.id);
+                            setSelectedTribe(null);
+                            setMode('map');
+                        }}
+                      ]);
+                    }} style={[styles.btnPrimaryFull, { backgroundColor: '#000', marginTop: 20 }]}>
+                      <Text style={styles.btnPrimaryText}>Dissolve Tribe ☠️</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               )}
             </ScrollView>
@@ -440,9 +557,15 @@ export default function MapScreen() {
     // List & Create Tabs
     return (
       <View style={StyleSheet.absoluteFill}>
-        <TouchableOpacity style={StyleSheet.absoluteFill} onPress={() => setMode('map')} />
-        <BlurView intensity={90} tint="light" style={styles.glassWrapperBottomFull}>
-          <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.1)' }}>
+        <BlurView intensity={95} tint="light" style={StyleSheet.absoluteFill}>
+          <View style={{flexDirection: 'row', alignItems: 'center', padding: 20, paddingTop: 40, borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.05)'}}>
+            <TouchableOpacity onPress={() => setMode('map')} style={{padding: 10, marginRight: 5}}>
+              <Feather name="x" size={26} color={Colors.text} />
+            </TouchableOpacity>
+            <Text style={[styles.panelTitle, {marginBottom: 0, flex: 1}]} numberOfLines={1}>The Tribes</Text>
+          </View>
+
+          <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.1)', backgroundColor: 'rgba(255,255,255,0.4)' }}>
             <TouchableOpacity style={{ flex: 1, padding: 15, alignItems: 'center', borderBottomWidth: tribeTab === 'my_tribes' ? 2 : 0, borderBottomColor: Colors.primary }} onPress={() => setTribeTab('my_tribes')}>
               <Text style={{ fontFamily: Typography.heading, color: tribeTab === 'my_tribes' ? Colors.primary : '#888' }}>Find Tribes</Text>
             </TouchableOpacity>
@@ -776,6 +899,18 @@ export default function MapScreen() {
             ))}
           </View>
         )}
+
+        <Text style={styles.panelTitle}>Frequency</Text>
+        <Text style={{fontFamily: Typography.body, color: '#666', marginBottom: 10, marginTop: -15, marginLeft: '4%'}}>Should this gathering happen regularly?</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 20 }}>
+          {['once', 'weekly', 'monthly'].map(rule => (
+            <TouchableOpacity key={rule} onPress={() => setDraft({...draft, cyclicalRule: rule === 'once' ? '' : rule})} style={[
+              styles.wizardSubCat, (draft.cyclicalRule === rule || (rule === 'once' && !draft.cyclicalRule)) && {backgroundColor: Colors.primary, borderColor: Colors.primary}
+            ]}>
+              <Text style={[styles.wizardSubCatText, (draft.cyclicalRule === rule || (rule === 'once' && !draft.cyclicalRule)) && {color: '#fff'}]}>{rule === 'once' ? 'One-time' : rule.charAt(0).toUpperCase() + rule.slice(1)}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
 
         <View style={styles.row}>
           <TouchableOpacity style={styles.btnSecondary} onPress={() => setMode('map')}><Text style={styles.btnSecondaryText}>Cancel</Text></TouchableOpacity>

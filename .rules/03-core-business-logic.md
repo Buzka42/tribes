@@ -2,3 +2,4 @@
 - Rule 2 - Event Privacy: Public events show exact pins. Private events show only a ~500m radius circle on the map. Exact address is revealed only to accepted participants.
 - Rule 3 - Event Creation: 3-step wizard (1. Interest/Title/Limit, 2. Mapbox Location/Time/Privacy toggle, 3. Token Cost Summary).
 - Rule 4 - Map UI: Bottom slider for date range filtering. Top right icon for interest/category filters (set during onboarding).
+- Rule 5 - Tribes Generation: Tribes are tightly bound communities that can only be originated when an active host successfully executes a post-event "Lock & Finalize" action—no freestanding public search/creation is available.

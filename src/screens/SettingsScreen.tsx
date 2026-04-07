@@ -15,6 +15,9 @@ export default function SettingsScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   
   const [displayName, setDisplayName] = useState(user?.displayName || '');
+  const [dateOfBirth, setDateOfBirth] = useState(user?.dateOfBirth || '');
+  const [sex, setSex] = useState(user?.sex || '');
+  const [description, setDescription] = useState(user?.description || '');
   const [locationName, setLocationName] = useState(user?.locationName || '');
   const [locationInput, setLocationInput] = useState(user?.locationName || '');
   const [locationCoords, setLocationCoords] = useState<{lat: number, lng: number} | null>({
@@ -41,6 +44,9 @@ export default function SettingsScreen() {
     try {
       await updateDoc(doc(db, 'users', user.uid), {
         displayName: displayName.trim(),
+        dateOfBirth,
+        sex,
+        description,
         locationName: locationName,
         homeLocation: {
           latitude: locationCoords.lat,
@@ -75,6 +81,39 @@ export default function SettingsScreen() {
             onChangeText={setDisplayName}
             placeholder="Jane Doe"
             placeholderTextColor="#999"
+          />
+
+          <Text style={styles.label}>Date of Birth</Text>
+          <TextInput
+            style={styles.input}
+            value={dateOfBirth}
+            onChangeText={setDateOfBirth}
+            placeholder="YYYY-MM-DD"
+            placeholderTextColor="#999"
+          />
+
+          <Text style={styles.label}>Sex</Text>
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            {['Male', 'Female', 'Other'].map(s => (
+              <TouchableOpacity 
+                key={s} 
+                onPress={() => setSex(s)}
+                style={[styles.chip, sex === s && styles.chipActive]}
+              >
+                <Text style={sex === s ? styles.chipTextActive : styles.chipText}>{s}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <Text style={styles.label}>Short Bio</Text>
+          <TextInput
+            style={[styles.input, { height: 80 }]}
+            value={description}
+            onChangeText={setDescription}
+            placeholder="What drives you? (Max 250 chars)"
+            placeholderTextColor="#999"
+            multiline
+            maxLength={250}
           />
 
           <Text style={styles.label}>Home Location</Text>
@@ -128,4 +167,8 @@ const styles = StyleSheet.create({
   btnPrimary: { backgroundColor: Colors.primary, paddingVertical: 18, borderRadius: 100, alignItems: 'center', marginTop: 15 },
   btnDisabled: { opacity: 0.5 },
   btnPrimaryText: { fontFamily: Typography.bodyBold, color: '#fff', fontSize: 16 },
+  chip: { flex: 1, paddingVertical: 12, borderWidth: 1, borderColor: '#eee', borderRadius: 12, alignItems: 'center', backgroundColor: '#fff' },
+  chipActive: { borderColor: Colors.primary, backgroundColor: Colors.primary + '15' },
+  chipText: { fontFamily: Typography.bodyBold, color: '#666' },
+  chipTextActive: { fontFamily: Typography.bodyBold, color: Colors.primary }
 });

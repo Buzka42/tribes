@@ -14,6 +14,9 @@ export interface User {
   createdAt: Date;
   isDev?: boolean;
   hasSeenTutorial?: boolean;
+  dateOfBirth?: string;
+  sex?: string;
+  description?: string;
 }
 
 export interface Event {
@@ -42,6 +45,7 @@ export interface Tribe {
   name: string;
   description: string;
   categoryId: string;
+  categorySub?: string[];
   creatorId: string;
   creatorName: string;
   members: string[];
@@ -49,6 +53,17 @@ export interface Tribe {
   pendingApplicants: string[];
   announcements: Announcement[];
   location?: LocationData;
+  leaders: string[];
   createdAt: Date;
   isPublic: boolean;
+  spiritId?: string;
+  isPrivateTribe?: boolean;
+}
+
+export interface EventFeedback {
+  eventId: string;
+  userId: string;
+  eventHappened: boolean;
+  satisfied: boolean;
+  submittedAt: Date;
 }

@@ -9,6 +9,9 @@ import { BlurView } from 'expo-blur';
 export default function SetupProfileScreen() {
   const { user } = useAuth();
   const [name, setName] = useState(user?.displayName && user.displayName !== 'User' ? user.displayName : '');
+  const [dateOfBirth, setDateOfBirth] = useState('');
+  const [sex, setSex] = useState('');
+  const [description, setDescription] = useState('');
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [selectedLoc, setSelectedLoc] = useState<any>(null);
@@ -28,6 +31,9 @@ export default function SetupProfileScreen() {
     try {
       await updateDoc(doc(db, 'users', user!.uid), {
         displayName: name,
+        dateOfBirth,
+        sex,
+        description,
         locationName: selectedLoc ? selectedLoc.place_name : user?.locationName,
         homeLocation: selectedLoc ? {
            longitude: selectedLoc.center[0],
@@ -72,6 +78,39 @@ export default function SetupProfileScreen() {
             ))}
           </View>
         )}
+        
+        <Text style={styles.label}>Date of Birth</Text>
+        <TextInput 
+          style={styles.input} 
+          placeholder="YYYY-MM-DD" 
+          placeholderTextColor="#999"
+          value={dateOfBirth}
+          onChangeText={setDateOfBirth}
+        />
+
+        <Text style={styles.label}>Sex</Text>
+        <View style={{ flexDirection: 'row', gap: 10, marginBottom: 20 }}>
+          {['Male', 'Female', 'Other'].map(s => (
+            <TouchableOpacity 
+              key={s} 
+              onPress={() => setSex(s)}
+              style={[styles.chip, sex === s && styles.chipActive]}
+            >
+              <Text style={sex === s ? styles.chipTextActive : styles.chipText}>{s}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <Text style={styles.label}>Short Bio (Optional)</Text>
+        <TextInput 
+          style={[styles.input, { height: 80 }]} 
+          placeholder="What drives you? (Max 250 chars)" 
+          placeholderTextColor="#999"
+          value={description}
+          onChangeText={setDescription}
+          multiline
+          maxLength={250}
+        />
 
         <TouchableOpacity 
           style={[styles.btnPrimary, (!name || !selectedLoc) && styles.btnDisabled]} 
@@ -97,5 +136,9 @@ const styles = StyleSheet.create({
   suggestionText: { fontFamily: Typography.body, fontSize: 13, color: Colors.text },
   btnPrimary: { backgroundColor: Colors.primary, paddingVertical: 18, borderRadius: 16, alignItems: 'center', marginTop: 10 },
   btnDisabled: { backgroundColor: '#ccc' },
-  btnPrimaryText: { fontFamily: Typography.bodyBold, color: '#fff', fontSize: 16 }
+  btnPrimaryText: { fontFamily: Typography.bodyBold, color: '#fff', fontSize: 16 },
+  chip: { flex: 1, paddingVertical: 12, borderWidth: 1, borderColor: '#ddd', borderRadius: 12, alignItems: 'center', backgroundColor: '#fff' },
+  chipActive: { borderColor: Colors.primary, backgroundColor: Colors.primary + '20' },
+  chipText: { fontFamily: Typography.bodyBold, color: '#666' },
+  chipTextActive: { fontFamily: Typography.bodyBold, color: Colors.primary }
 });

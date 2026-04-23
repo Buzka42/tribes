@@ -9,6 +9,7 @@ export const SPIRIT_ASSETS: Record<string, any> = {
   cosmos: require("../assets/cosmos.png"),
   crystal: require("../assets/crystal.png"),
   forest: require("../assets/forest.png"),
+  character: require("../assets/character.png"),
   moonwarrior: require("../assets/moonwarrior.png"),
   shroom: require("../assets/shroom.png"),
   sun: require("../assets/sun.png"),

@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Platform, KeyboardAvoidingView, Image } from 'react-native';
+import {
+  View, Text, TextInput, TouchableOpacity, StyleSheet,
+  ActivityIndicator, Platform, KeyboardAvoidingView, Image, ScrollView,
+} from 'react-native';
 import { auth } from '../config/firebase';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { Colors, Typography } from '../theme';
@@ -13,28 +16,20 @@ export default function LoginScreen() {
 
   const handleAuth = async () => {
     setErrorMsg('');
-    if (!email || !password) {
-      setErrorMsg("Please fill in all details to proceed.");
-      return;
-    }
+    if (!email || !password) { setErrorMsg('Please fill in all fields.'); return; }
     setLoading(true);
     try {
-      if (isLogin) {
-        await signInWithEmailAndPassword(auth, email, password);
-      } else {
-        await createUserWithEmailAndPassword(auth, email, password);
-      }
+      if (isLogin) await signInWithEmailAndPassword(auth, email, password);
+      else await createUserWithEmailAndPassword(auth, email, password);
     } catch (error: any) {
-      let friendlyError = error.message;
-      if (error.code === 'auth/invalid-credential') friendlyError = "Incorrect password or email.";
-      if (error.code === 'auth/user-not-found') friendlyError = "Account not found. Please switch to Sign Up!";
-      if (error.code === 'auth/wrong-password') friendlyError = "Incorrect password, please try again.";
-      if (error.code === 'auth/email-already-in-use') friendlyError = "Account already exists. Please switch to Sign In!";
-      if (error.code === 'auth/too-many-requests') friendlyError = "Too many failed attempts. Try again later.";
-      setErrorMsg(friendlyError);
-    } finally {
-      setLoading(false);
-    }
+      let msg = error.message;
+      if (error.code === 'auth/invalid-credential') msg = 'Incorrect email or password.';
+      if (error.code === 'auth/user-not-found') msg = 'No account found. Switch to Sign Up.';
+      if (error.code === 'auth/wrong-password') msg = 'Incorrect password, try again.';
+      if (error.code === 'auth/email-already-in-use') msg = 'Account exists. Switch to Sign In.';
+      if (error.code === 'auth/too-many-requests') msg = 'Too many attempts. Try again later.';
+      setErrorMsg(msg);
+    } finally { setLoading(false); }
   };
 
   const handleGoogleAuth = async () => {
@@ -45,86 +40,227 @@ export default function LoginScreen() {
         const provider = new GoogleAuthProvider();
         await signInWithPopup(auth, provider);
       } else {
-        setErrorMsg("Native App Google Sign-In pending official App Client IDs.");
+        setErrorMsg('Native Google Sign-In coming soon.');
       }
     } catch (error: any) {
-      let friendlyError = error.message;
-      if (error.code === 'auth/popup-closed-by-user') friendlyError = "Google login popup was closed.";
-      setErrorMsg(friendlyError);
-    } finally {
-      setLoading(false);
-    }
+      let msg = error.message;
+      if (error.code === 'auth/popup-closed-by-user') msg = 'Sign-in cancelled.';
+      setErrorMsg(msg);
+    } finally { setLoading(false); }
   };
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.container}>
-      <View style={styles.card}>
-        <Text style={styles.title}>Tribes <Image source={require('../assets/leaf.png')} style={{width: 34, height: 34, resizeMode: 'contain'}} /></Text>
-        <Text style={styles.subtitle}>{isLogin ? 'Log in to reconnect with your tribe.' : 'Join a vibrant outdoor community.'}</Text>
-        
-        {errorMsg ? (
-          <View style={styles.errorBox}>
-             <Text style={styles.errorText}>{errorMsg}</Text>
-          </View>
-        ) : null}
-        
-        <TextInput 
-          style={styles.input} 
-          placeholder="Email Address" 
-          placeholderTextColor={Colors.textLight} 
-          value={email} 
-          onChangeText={setEmail} 
-          autoCapitalize="none" 
-          keyboardType="email-address" 
-        />
-        <TextInput 
-          style={styles.input} 
-          placeholder="Secret Password" 
-          placeholderTextColor={Colors.textLight} 
-          value={password} 
-          onChangeText={setPassword} 
-          secureTextEntry 
-        />
-        
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      style={styles.container}
+    >
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Wordmark */}
+        <View style={styles.wordmarkRow}>
+          <Text style={styles.wordmark}>Tribes</Text>
+          <Image source={require('../assets/leaf.png')} style={styles.wordmarkLeaf} />
+        </View>
+        <Text style={styles.tagline}>
+          {isLogin ? 'Return to your people.' : 'Find your people.'}
+        </Text>
+
+        {/* Error */}
+        {!!errorMsg && (
+          <Text style={styles.errorText}>{errorMsg}</Text>
+        )}
+
+        {/* Inputs */}
+        <View style={styles.fieldGroup}>
+          <TextInput
+            style={styles.input}
+            placeholder="Email address"
+            placeholderTextColor={Colors.textPlaceholder}
+            value={email}
+            onChangeText={setEmail}
+            autoCapitalize="none"
+            keyboardType="email-address"
+          />
+          <View style={styles.fieldDivider} />
+          <TextInput
+            style={styles.input}
+            placeholder="Password"
+            placeholderTextColor={Colors.textPlaceholder}
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+          />
+        </View>
+
+        {/* Actions */}
         {loading ? (
-          <ActivityIndicator size="large" color={Colors.primary} style={{ marginVertical: 20 }} />
+          <ActivityIndicator size="large" color={Colors.gold} style={{ marginVertical: 28 }} />
         ) : (
-          <View style={styles.buttonContainer}>
-            <TouchableOpacity style={styles.btnPrimary} onPress={handleAuth}>
-              <Text style={styles.btnPrimaryText}>{isLogin ? "Sign In" : "Sign Up & Get 10 🍃"}</Text>
+          <View style={styles.actions}>
+            <TouchableOpacity style={styles.btnPrimary} onPress={handleAuth} activeOpacity={0.82}>
+              {isLogin ? (
+                <Text style={styles.btnPrimaryText}>Sign In</Text>
+              ) : (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Text style={styles.btnPrimaryText}>Sign Up — 10</Text>
+                  <Image source={require('../assets/leaf.png')} style={styles.btnLeaf} />
+                  <Text style={styles.btnPrimaryText}>free</Text>
+                </View>
+              )}
             </TouchableOpacity>
-            
-            <TouchableOpacity style={styles.btnGoogle} onPress={handleGoogleAuth}>
-              <Text style={styles.btnGoogleText}>Continue lightly with Google</Text>
+
+            <TouchableOpacity style={styles.btnGhost} onPress={handleGoogleAuth} activeOpacity={0.75}>
+              <Text style={styles.btnGhostText}>Continue with Google</Text>
             </TouchableOpacity>
           </View>
         )}
-        
-        <TouchableOpacity style={styles.switchBtn} onPress={() => { setIsLogin(!isLogin); setErrorMsg(''); }}>
-          <Text style={styles.switchBtnText}>
-            {isLogin ? "Looking for a new tribe? Sign Up" : "Already a member? Sign In"}
+
+        {/* Switch mode */}
+        <TouchableOpacity
+          style={styles.switchRow}
+          onPress={() => { setIsLogin(!isLogin); setErrorMsg(''); }}
+        >
+          <Text style={styles.switchText}>
+            {isLogin ? 'New here?' : 'Already a member?'}
+            {'  '}
+            <Text style={styles.switchLink}>{isLogin ? 'Create account' : 'Sign in'}</Text>
           </Text>
         </TouchableOpacity>
-      </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: 'center', backgroundColor: Colors.background, padding: 20 },
-  card: { backgroundColor: Colors.surface, padding: 35, borderRadius: 32, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 30, elevation: 12, borderWidth: 1, borderColor: 'rgba(0,0,0,0.02)' },
-  title: { fontFamily: Typography.heading, fontSize: 50, textAlign: 'center', marginBottom: 10, color: Colors.text },
-  subtitle: { fontFamily: Typography.body, fontSize: 16, textAlign: 'center', marginBottom: 35, color: Colors.textLight },
-  
-  errorBox: { backgroundColor: 'rgba(163, 83, 83, 0.1)', padding: 15, borderRadius: 12, marginBottom: 20, borderWidth: 1, borderColor: 'rgba(163, 83, 83, 0.3)' },
-  errorText: { fontFamily: Typography.bodySemibold, color: Colors.danger, textAlign: 'center', fontSize: 14 },
-  
-  input: { fontFamily: Typography.body, borderWidth: 1, borderColor: '#F0EFEA', backgroundColor: '#FAFAFA', padding: 18, marginBottom: 15, borderRadius: 16, fontSize: 16, color: Colors.text },
-  buttonContainer: { marginTop: 5, marginBottom: 25, gap: 15 },
-  btnPrimary: { backgroundColor: Colors.primary, paddingVertical: 18, borderRadius: 16, alignItems: 'center', shadowColor: Colors.primary, shadowOpacity: 0.25, shadowRadius: 15, elevation: 5 },
-  btnPrimaryText: { fontFamily: Typography.bodyBold, color: '#fff', fontSize: 16 },
-  btnGoogle: { backgroundColor: '#fff', paddingVertical: 18, borderRadius: 16, borderWidth: 1, borderColor: '#F0EFEA', alignItems: 'center' },
-  btnGoogleText: { fontFamily: Typography.bodySemibold, color: Colors.text, fontSize: 16 },
-  switchBtn: { alignItems: 'center', marginTop: 10 },
-  switchBtnText: { fontFamily: Typography.bodySemibold, color: Colors.textLight, fontSize: 14 }
+  container: {
+    flex: 1,
+    backgroundColor: Colors.bg,
+  },
+  scroll: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+    paddingVertical: 60,
+  },
+
+  // ── Wordmark ───────────────────────────────────────────────────────────────
+  wordmarkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+    gap: 10,
+  },
+  wordmark: {
+    fontFamily: Typography.headline,
+    fontSize: 52,
+    color: Colors.textPrimary,
+    letterSpacing: -0.5,
+  },
+  wordmarkLeaf: {
+    width: 34,
+    height: 34,
+    resizeMode: 'contain',
+    marginTop: 6,
+  },
+  tagline: {
+    fontFamily: Typography.bodyLight,
+    fontSize: 16,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: 48,
+    letterSpacing: 0.2,
+  },
+
+  // ── Error ─────────────────────────────────────────────────────────────────
+  errorText: {
+    fontFamily: Typography.body,
+    fontSize: 13,
+    color: Colors.danger,
+    textAlign: 'center',
+    marginBottom: 20,
+    lineHeight: 18,
+  },
+
+  // ── Input group ───────────────────────────────────────────────────────────
+  fieldGroup: {
+    borderRadius: 18,
+    backgroundColor: Colors.bgInput,
+    borderWidth: 1,
+    borderColor: Colors.hairline,
+    overflow: 'hidden',
+    marginBottom: 20,
+  },
+  input: {
+    fontFamily: Typography.body,
+    fontSize: 15,
+    color: Colors.textPrimary,
+    paddingHorizontal: 22,
+    paddingVertical: 18,
+  },
+  fieldDivider: {
+    height: 1,
+    backgroundColor: Colors.hairline,
+    marginHorizontal: 0,
+  },
+
+  // ── Buttons ───────────────────────────────────────────────────────────────
+  actions: {
+    gap: 13,
+    marginBottom: 28,
+  },
+  btnPrimary: {
+    backgroundColor: Colors.glassBtnBg,
+    borderRadius: 9999,
+    height: 56,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: Colors.gold,
+  },
+  btnPrimaryText: {
+    fontFamily: Typography.bodyMedium,
+    color: Colors.textPrimary,
+    fontSize: 15,
+    letterSpacing: 0.2,
+  },
+  btnLeaf: {
+    width: 16,
+    height: 16,
+    resizeMode: 'contain',
+    transform: [{ translateY: 1 }],
+  },
+  btnGhost: {
+    borderRadius: 9999,
+    height: 56,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: Colors.hairlineNeutral,
+  },
+  btnGhostText: {
+    fontFamily: Typography.bodyMedium,
+    color: Colors.textSecondary,
+    fontSize: 15,
+  },
+
+  // ── Switch ────────────────────────────────────────────────────────────────
+  switchRow: {
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  switchText: {
+    fontFamily: Typography.bodyLight,
+    color: Colors.textMuted,
+    fontSize: 14,
+  },
+  switchLink: {
+    fontFamily: Typography.bodyMedium,
+    color: Colors.gold,
+  },
 });

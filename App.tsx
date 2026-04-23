@@ -2,22 +2,31 @@ import React from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AppNavigator from './src/navigation/AppNavigator';
 import { AuthProvider } from './src/hooks/useAuth';
-import { useFonts, PlayfairDisplay_600SemiBold } from '@expo-google-fonts/playfair-display';
-import { Inter_400Regular, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
+import { useFonts } from 'expo-font';
+import {
+  Merriweather_700Bold,
+  Merriweather_900Black,
+} from '@expo-google-fonts/merriweather';
+import {
+  Outfit_300Light,
+  Outfit_400Regular,
+  Outfit_500Medium,
+} from '@expo-google-fonts/outfit';
 import { ActivityIndicator, View } from 'react-native';
 
 export default function App() {
   const [fontsLoaded] = useFonts({
-    PlayfairDisplay_600SemiBold,
-    Inter_400Regular,
-    Inter_600SemiBold,
-    Inter_700Bold,
+    Merriweather_700Bold,
+    Merriweather_900Black,
+    Outfit_300Light,
+    Outfit_400Regular,
+    Outfit_500Medium,
   });
 
   if (!fontsLoaded) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F9F8F4' }}>
-        <ActivityIndicator size="large" color="#5E7153" />
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#1A2421' }}>
+        <ActivityIndicator size="large" color="#D9A06F" />
       </View>
     );
   }

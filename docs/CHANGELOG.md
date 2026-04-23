@@ -1,5 +1,17 @@
 # Changelog
 
+- fix: Corrected event chat location line and attending count text color to `Colors.textLight` matching design system
+- fix: Corrected "Tick who showed up" label color to `Colors.textSecondary` for legibility in finalize panel
+- fix: Replaced raw UID display with cached `displayName` fetched from Firestore for event participants
+- feat: Finalized and surveyed events now disappear from map bubbles — `feedbackSubmitted` state filters them out of `displayFilterEvents`
+- feat: Added public/private event toggle to event creation wizard — private events hidden from non-participants map layer
+- feat: Implemented private event invite link system — host and joined attendees get a "Copy Invite Link" button; web processes `?joinEvent=<id>` URL param on load to open the target event panel directly
+- fix: Changed "Filters" button text color from bright white to `Colors.textSecondary` matching date slider pill labels
+- chore: Configured EAS Build for internal Android APK distribution — added `eas.json` preview profile with `buildType: "apk"`, created `app.config.js` dynamic config for Mapbox plugin, added `.eas/build/pre-install.sh` hook to write `MAPBOX_DOWNLOADS_TOKEN` to `~/.gradle/gradle.properties` before Gradle runs
+- fix: Added Mapbox ToS attribution links (© Mapbox, © OpenStreetMap, Improve this map) to SettingsScreen MAP DATA section satisfying attribution requirements for mobile builds
+
+- feat: Full UI overhaul — replaced Playfair Display + Inter with Merriweather (headlines) + Outfit (UI/body) via @expo-google-fonts; dark forest palette (#1A2421 bg, #D9A06F gold, #6B8E6B sage) applied across all screens; de-boxed architecture replacing card containers with hairline dividers; pill-shaped buttons (borderRadius 9999, 52–54px height); bottom sheets with 24px top radius; Mapbox outdoors-v12 map style; Feather icons replacing all standard UI emojis (moon rating system preserved); applied consistently to LoginScreen, SetupProfileScreen, SettingsScreen, MapScreen (native + web)
+
 - feat: Deployed 5-Phase Lunar Rating system for dynamic post-event feedback capturing 1-5 ratings.
 - feat: Refactored Profile infrastructure shielding geographic locations and adding Age, Sex, and Bios.
 - feat: Expanded Tribe management with asynchronous invite links and real-time Chief application alerts.

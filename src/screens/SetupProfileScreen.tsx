@@ -1,14 +1,18 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
+import {
+  View, Text, TextInput, TouchableOpacity, StyleSheet,
+  KeyboardAvoidingView, Platform, ScrollView,
+} from 'react-native';
 import { useAuth } from '../hooks/useAuth';
 import { db } from '../config/firebase';
 import { doc, updateDoc } from 'firebase/firestore';
 import { Colors, Typography } from '../theme';
-import { BlurView } from 'expo-blur';
 
 export default function SetupProfileScreen() {
   const { user } = useAuth();
-  const [name, setName] = useState(user?.displayName && user.displayName !== 'User' ? user.displayName : '');
+  const [name, setName] = useState(
+    user?.displayName && user.displayName !== 'User' ? user.displayName : ''
+  );
   const [dateOfBirth, setDateOfBirth] = useState('');
   const [sex, setSex] = useState('');
   const [description, setDescription] = useState('');
@@ -18,12 +22,14 @@ export default function SetupProfileScreen() {
 
   const searchLocation = async (text: string) => {
     setQuery(text);
-    if(text.length < 3) return setSuggestions([]);
+    if (text.length < 3) return setSuggestions([]);
     try {
-      const res = await fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(text)}.json?access_token=${process.env.EXPO_PUBLIC_MAPBOX_KEY}&autocomplete=true&types=place,address`);
+      const res = await fetch(
+        `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(text)}.json?access_token=${process.env.EXPO_PUBLIC_MAPBOX_KEY}&autocomplete=true&types=place,address`
+      );
       const data = await res.json();
       setSuggestions(data.features || []);
-    } catch(e) {}
+    } catch (e) {}
   };
 
   const handleFinish = async () => {
@@ -35,110 +41,253 @@ export default function SetupProfileScreen() {
         sex,
         description,
         locationName: selectedLoc ? selectedLoc.place_name : user?.locationName,
-        homeLocation: selectedLoc ? {
-           longitude: selectedLoc.center[0],
-           latitude: selectedLoc.center[1]
-        } : user?.homeLocation || null
+        homeLocation: selectedLoc
+          ? { longitude: selectedLoc.center[0], latitude: selectedLoc.center[1] }
+          : user?.homeLocation || null,
       });
-    } catch(e) {
-      console.log(e);
-    }
+    } catch (e) { console.log(e); }
   };
 
+  const canContinue = !!name && (!!selectedLoc || !!user?.locationName);
+
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.container}>
-      <BlurView intensity={80} tint="light" style={styles.glassCard}>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      style={styles.container}
+    >
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Header */}
         <Text style={styles.title}>Manifest Your Presence</Text>
         <Text style={styles.subtitle}>Let the tribe know who you are and where you roam.</Text>
-        
-        <Text style={styles.label}>Display Name</Text>
-        <TextInput 
-          style={styles.input} 
-          placeholder="First Name (Recommended)" 
-          placeholderTextColor="#999"
+
+        {/* Display Name */}
+        <Text style={styles.fieldLabel}>DISPLAY NAME</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="First name (recommended)"
+          placeholderTextColor={Colors.textPlaceholder}
           value={name}
           onChangeText={setName}
         />
 
-        <Text style={styles.label}>Home Base (City or Address)</Text>
-        <TextInput 
-          style={styles.input} 
-          placeholder="e.g. Warsaw, Zlota 44" 
-          placeholderTextColor="#999"
+        {/* Home Base */}
+        <Text style={styles.fieldLabel}>HOME BASE</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="City or street address"
+          placeholderTextColor={Colors.textPlaceholder}
           value={selectedLoc ? selectedLoc.place_name : query}
           onChangeText={(v) => { setSelectedLoc(null); searchLocation(v); }}
         />
-        
         {!selectedLoc && suggestions.length > 0 && (
-          <View style={styles.suggestionsContainer}>
+          <View style={styles.suggestions}>
             {suggestions.map((s, i) => (
-              <TouchableOpacity key={i} style={styles.suggestionItem} onPress={() => { setSelectedLoc(s); setSuggestions([]); }}>
-                <Text style={styles.suggestionText}>{s.place_name}</Text>
+              <TouchableOpacity
+                key={i}
+                style={[styles.suggestionItem, i < suggestions.length - 1 && styles.suggestionBorder]}
+                onPress={() => { setSelectedLoc(s); setSuggestions([]); }}
+              >
+                <Text style={styles.suggestionText} numberOfLines={1}>{s.place_name}</Text>
               </TouchableOpacity>
             ))}
           </View>
         )}
-        
-        <Text style={styles.label}>Date of Birth</Text>
-        <TextInput 
-          style={styles.input} 
-          placeholder="YYYY-MM-DD" 
-          placeholderTextColor="#999"
+
+        {/* Date of Birth */}
+        <Text style={styles.fieldLabel}>DATE OF BIRTH</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="YYYY-MM-DD"
+          placeholderTextColor={Colors.textPlaceholder}
           value={dateOfBirth}
           onChangeText={setDateOfBirth}
         />
 
-        <Text style={styles.label}>Sex</Text>
-        <View style={{ flexDirection: 'row', gap: 10, marginBottom: 20 }}>
+        {/* Sex */}
+        <Text style={styles.fieldLabel}>IDENTITY</Text>
+        <View style={styles.chipRow}>
           {['Male', 'Female', 'Other'].map(s => (
-            <TouchableOpacity 
-              key={s} 
+            <TouchableOpacity
+              key={s}
               onPress={() => setSex(s)}
               style={[styles.chip, sex === s && styles.chipActive]}
+              activeOpacity={0.75}
             >
-              <Text style={sex === s ? styles.chipTextActive : styles.chipText}>{s}</Text>
+              <Text style={[styles.chipText, sex === s && styles.chipTextActive]}>{s}</Text>
             </TouchableOpacity>
           ))}
         </View>
 
-        <Text style={styles.label}>Short Bio (Optional)</Text>
-        <TextInput 
-          style={[styles.input, { height: 80 }]} 
-          placeholder="What drives you? (Max 250 chars)" 
-          placeholderTextColor="#999"
+        {/* Bio */}
+        <Text style={styles.fieldLabel}>SHORT BIO</Text>
+        <TextInput
+          style={[styles.input, styles.inputMulti]}
+          placeholder="What drives you? (Optional, max 250 chars)"
+          placeholderTextColor={Colors.textPlaceholder}
           value={description}
           onChangeText={setDescription}
           multiline
           maxLength={250}
         />
+        {description.length > 0 && (
+          <Text style={styles.charCount}>{description.length} / 250</Text>
+        )}
 
-        <TouchableOpacity 
-          style={[styles.btnPrimary, (!name || !selectedLoc) && styles.btnDisabled]} 
-          disabled={!name || !selectedLoc}
+        {/* CTA */}
+        <TouchableOpacity
+          style={[styles.btnPrimary, !canContinue && styles.btnDisabled]}
+          disabled={!canContinue}
           onPress={handleFinish}
+          activeOpacity={0.82}
         >
           <Text style={styles.btnPrimaryText}>Enter The Tribes</Text>
         </TouchableOpacity>
-      </BlurView>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background, justifyContent: 'center', alignItems: 'center', padding: 20 },
-  glassCard: { width: '100%', maxWidth: 450, padding: 30, borderRadius: 24, backgroundColor: 'rgba(255,255,255,0.7)', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 20, elevation: 10 },
-  title: { fontFamily: Typography.heading, fontSize: 26, color: Colors.text, marginBottom: 8 },
-  subtitle: { fontFamily: Typography.body, fontSize: 14, color: Colors.textLight, marginBottom: 25 },
-  label: { fontFamily: Typography.bodyBold, fontSize: 13, color: Colors.primaryDark, marginBottom: 8 },
-  input: { backgroundColor: 'rgba(255,255,255,0.9)', borderWidth: 1, borderColor: '#ddd', borderRadius: 16, padding: 16, fontSize: 15, fontFamily: Typography.body, marginBottom: 20, color: Colors.text },
-  suggestionsContainer: { backgroundColor: '#fff', borderRadius: 16, borderWidth: 1, borderColor: '#eee', maxHeight: 150, overflow: 'hidden', marginTop: -15, marginBottom: 20 },
-  suggestionItem: { padding: 12, borderBottomWidth: 1, borderBottomColor: '#f5f5f5' },
-  suggestionText: { fontFamily: Typography.body, fontSize: 13, color: Colors.text },
-  btnPrimary: { backgroundColor: Colors.primary, paddingVertical: 18, borderRadius: 16, alignItems: 'center', marginTop: 10 },
-  btnDisabled: { backgroundColor: '#ccc' },
-  btnPrimaryText: { fontFamily: Typography.bodyBold, color: '#fff', fontSize: 16 },
-  chip: { flex: 1, paddingVertical: 12, borderWidth: 1, borderColor: '#ddd', borderRadius: 12, alignItems: 'center', backgroundColor: '#fff' },
-  chipActive: { borderColor: Colors.primary, backgroundColor: Colors.primary + '20' },
-  chipText: { fontFamily: Typography.bodyBold, color: '#666' },
-  chipTextActive: { fontFamily: Typography.bodyBold, color: Colors.primary }
+  container: {
+    flex: 1,
+    backgroundColor: Colors.bg,
+  },
+  scroll: {
+    flexGrow: 1,
+    paddingHorizontal: 28,
+    paddingTop: 72,
+    paddingBottom: 48,
+  },
+
+  // ── Header ─────────────────────────────────────────────────────────────────
+  title: {
+    fontFamily: Typography.headline,
+    fontSize: 30,
+    color: Colors.textPrimary,
+    marginBottom: 10,
+    letterSpacing: -0.3,
+    lineHeight: 40,
+  },
+  subtitle: {
+    fontFamily: Typography.bodyLight,
+    fontSize: 15,
+    color: Colors.textSecondary,
+    marginBottom: 40,
+    lineHeight: 22,
+  },
+
+  // ── Field label ───────────────────────────────────────────────────────────
+  fieldLabel: {
+    fontFamily: Typography.bodyLight,
+    fontSize: 11,
+    color: 'rgba(217,160,111,0.65)',
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
+    marginBottom: 10,
+  },
+
+  // ── Inputs ────────────────────────────────────────────────────────────────
+  input: {
+    fontFamily: Typography.body,
+    fontSize: 15,
+    color: Colors.textPrimary,
+    backgroundColor: Colors.bgInput,
+    borderWidth: 1,
+    borderColor: Colors.borderInput,
+    borderRadius: 14,
+    paddingHorizontal: 18,
+    paddingVertical: 15,
+    marginBottom: 26,
+  },
+  inputMulti: {
+    height: 90,
+    textAlignVertical: 'top',
+    paddingTop: 15,
+    marginBottom: 6,
+  },
+  charCount: {
+    fontFamily: Typography.bodyLight,
+    fontSize: 11,
+    color: Colors.textMuted,
+    textAlign: 'right',
+    marginBottom: 26,
+  },
+
+  // ── Suggestions ───────────────────────────────────────────────────────────
+  suggestions: {
+    backgroundColor: Colors.bgElevated,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.hairline,
+    maxHeight: 160,
+    overflow: 'hidden',
+    marginTop: -20,
+    marginBottom: 26,
+  },
+  suggestionItem: {
+    paddingHorizontal: 18,
+    paddingVertical: 13,
+  },
+  suggestionBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.hairlineNeutral,
+  },
+  suggestionText: {
+    fontFamily: Typography.body,
+    fontSize: 13,
+    color: Colors.textSecondary,
+  },
+
+  // ── Sex chips ─────────────────────────────────────────────────────────────
+  chipRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 26,
+  },
+  chip: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 9999,
+    borderWidth: 1,
+    borderColor: Colors.hairlineNeutral,
+    alignItems: 'center',
+    backgroundColor: Colors.bgInput,
+  },
+  chipActive: {
+    borderColor: Colors.gold,
+    backgroundColor: Colors.goldDim,
+  },
+  chipText: {
+    fontFamily: Typography.bodyMedium,
+    fontSize: 13,
+    color: Colors.textMuted,
+  },
+  chipTextActive: {
+    color: Colors.gold,
+  },
+
+  // ── CTA ───────────────────────────────────────────────────────────────────
+  btnPrimary: {
+    backgroundColor: Colors.glassBtnBg,
+    borderRadius: 9999,
+    height: 56,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: Colors.gold,
+  },
+  btnDisabled: {
+    opacity: 0.35,
+  },
+  btnPrimaryText: {
+    fontFamily: Typography.bodyMedium,
+    color: Colors.textPrimary,
+    fontSize: 15,
+    letterSpacing: 0.2,
+  },
 });

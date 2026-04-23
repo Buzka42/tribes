@@ -24,6 +24,10 @@ import { auth, db } from "../config/firebase";
 import { signOut } from "firebase/auth";
 import { doc, updateDoc, getDoc } from "firebase/firestore";
 import { Colors, Typography } from "../theme";
+import { EventChat } from '../components/EventChat';
+import { TribePanel } from '../components/TribePanel';
+import { CreateTribeWizard } from '../components/CreateTribeWizard';
+import { ProfileModal } from '../components/ProfileModal';
 import {
   format,
   isToday,
@@ -36,41 +40,14 @@ import {
 } from "date-fns";
 import { Feather } from "@expo/vector-icons";
 import { EVENT_CATEGORIES, CategoryGroupId } from "../data/categories";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { SPIRIT_ASSETS, SPIRIT_LABELS, renderMoons } from "../utils/assets";
 
 import Map, { Marker, Layer, Source, MapMouseEvent } from "react-map-gl/mapbox";
+import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
-import Svg, { Path, Circle, Text as SvgText, G } from "react-native-svg";
 
-const renderMoons = (sum: number, count: number) => {
-  if (!count) return "🌕"; // default
-  const avg = Math.max(1, Math.min(Math.round(sum / count), 5));
-  return ["🌑", "🌒", "🌓", "🌔", "🌕"][avg - 1];
-};
-
-// Spirit asset map — defined at module level for performance
-const SPIRIT_ASSETS: Record<string, any> = {
-  cosmos: require("../assets/cosmos.png"),
-  crystal: require("../assets/crystal.png"),
-  forest: require("../assets/forest.png"),
-  moonwarrior: require("../assets/moonwarrior.png"),
-  shroom: require("../assets/shroom.png"),
-  sun: require("../assets/sun.png"),
-  sunwarrior: require("../assets/sunwarrior.png"),
-  trident: require("../assets/trident.png"),
-  yingyang: require("../assets/yingyang.png"),
-};
-const SPIRIT_LABELS: Record<string, string> = {
-  cosmos: "Cosmos",
-  crystal: "Crystal",
-  forest: "Forest",
-  moonwarrior: "Moon",
-  shroom: "Shroom",
-  sun: "Sun",
-  sunwarrior: "Warrior",
-  trident: "Trident",
-  yingyang: "Yin Yang",
-};
+const MAPBOX_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_KEY as string;
+mapboxgl.accessToken = MAPBOX_TOKEN;
 
 export default function MapScreen() {
   const { user } = useAuth();
@@ -196,6 +173,8 @@ export default function MapScreen() {
   const [creatorStatsCache, setCreatorStatsCache] = useState<
     Record<string, { ratingSum: number; ratingCount: number; name?: string }>
   >({});
+  const [participantNamesCache, setParticipantNamesCache] = useState<Record<string, string>>({});
+  const [hasProcessedEventInvite, setHasProcessedEventInvite] = useState(false);
   const [showTribePrompt, setShowTribePrompt] = useState(false);
 
   const [canScrollLeft, setCanScrollLeft] = useState(false);
@@ -222,7 +201,7 @@ export default function MapScreen() {
 
   const dummyEvent: any = {
     id: "tutorial-dummy",
-    title: "Sunset Hike 🌄",
+    title: "Sunset Hike",
     interest: "Hiking",
     categoryId: "outdoor",
     categorySub: ["Hiking"],
@@ -241,7 +220,14 @@ export default function MapScreen() {
     maxParticipants: 10,
   };
 
-  let displayFilterEvents = events.filter((e) => e.status !== "cancelled" && e.status !== "finalized");
+  let displayFilterEvents = events.filter((e) => {
+    if (e.status === "cancelled" || e.status === "finalized") return false;
+    // Private events only visible to participants
+    if (e.isPrivate && !e.participants?.includes(user?.uid || "")) return false;
+    // Hide events where user already submitted feedback
+    if (feedbackSubmitted[e.id]) return false;
+    return true;
+  });
   if (activeAgeFilters.length > 0) {
     displayFilterEvents = displayFilterEvents.filter(
       (e) => e.ageGroup && activeAgeFilters.includes(e.ageGroup),
@@ -270,26 +256,25 @@ export default function MapScreen() {
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
 
-  if (dateFilter !== "All") {
-    displayFilterEvents = displayFilterEvents.filter((e) => {
-      if (!e.time) return false;
-      const t = new Date(e.time);
-      if (dateFilter === "30 Days")
-        return t >= todayStart && t <= addDays(todayStart, 30);
-      if (dateFilter === "Today") return isToday(t);
-      if (dateFilter === "Tomorrow") return isTomorrow(t);
-      if (dateFilter === "Weekend")
-        return t >= todayStart && t <= addDays(todayStart, 7) && isWeekend(t);
-      if (dateFilter === "Next Week") {
-        const nextWk = addWeeks(todayStart, 1);
-        return (
-          t >= startOfWeek(nextWk, { weekStartsOn: 1 }) &&
-          t <= endOfWeek(nextWk, { weekStartsOn: 1 })
-        );
-      }
-      return true;
-    });
-  }
+  displayFilterEvents = displayFilterEvents.filter((e) => {
+    if (!e.time) return false;
+    const t = new Date(e.time);
+    if (dateFilter === "All") return t >= todayStart;                    // all future, no upper bound
+    if (dateFilter === "30 Days")
+      return t >= todayStart && t <= addDays(todayStart, 30);
+    if (dateFilter === "Today") return isToday(t);
+    if (dateFilter === "Tomorrow") return isTomorrow(t);
+    if (dateFilter === "Weekend")
+      return t >= todayStart && t <= addDays(todayStart, 7) && isWeekend(t);
+    if (dateFilter === "Next Week") {
+      const nextWk = addWeeks(todayStart, 1);
+      return (
+        t >= startOfWeek(nextWk, { weekStartsOn: 1 }) &&
+        t <= endOfWeek(nextWk, { weekStartsOn: 1 })
+      );
+    }
+    return true;
+  });
   let displayEvents = displayFilterEvents;
   if (tutStep >= 6 && tutStep <= 7)
     displayEvents = [...displayEvents, dummyEvent];
@@ -322,6 +307,23 @@ export default function MapScreen() {
       }
     }
   }, [tribes, hasProcessedInvite]);
+
+  // Handle private event invite links (?joinEvent=<eventId>)
+  React.useEffect(() => {
+    if (typeof window !== "undefined" && !hasProcessedEventInvite && events.length > 0) {
+      const qs = new URLSearchParams(window.location.search);
+      const joinEventId = qs.get("joinEvent");
+      if (joinEventId) {
+        const inviteEvent = events.find((e) => e.id === joinEventId);
+        if (inviteEvent) {
+          setSelectedEvent(inviteEvent);
+          setMode("event_chat");
+          window.history.replaceState({}, "", window.location.pathname);
+        }
+        setHasProcessedEventInvite(true);
+      }
+    }
+  }, [events, hasProcessedEventInvite]);
 
   React.useEffect(() => {
     if (!profileViewUid) {
@@ -375,6 +377,22 @@ export default function MapScreen() {
       ) || [],
     );
     setFeedbackAnswer({});
+    // Fetch display names for all participants
+    (selectedEvent.participants || []).forEach((uid) => {
+      if (!participantNamesCache[uid]) {
+        getDoc(doc(db, "users", uid))
+          .then((snap) => {
+            if (snap.exists()) {
+              const d = snap.data();
+              setParticipantNamesCache((prev) => ({
+                ...prev,
+                [uid]: d.displayName || uid.substring(0, 8),
+              }));
+            }
+          })
+          .catch(() => {});
+      }
+    });
   }, [selectedEvent?.id]);
 
   // --- CLUSTERING (zoom-aware) ---
@@ -623,9 +641,13 @@ export default function MapScreen() {
             bottom: 0,
             left: 0,
             right: 0,
-            backgroundColor: "rgba(18,28,16,0.99)",
+            backgroundColor: Colors.bgElevated,
             borderTopLeftRadius: 28,
             borderTopRightRadius: 28,
+            borderTopWidth: 1,
+            borderLeftWidth: 1,
+            borderRightWidth: 1,
+            borderColor: Colors.glassCardBorder,
             padding: 24,
             paddingBottom: 44,
             maxHeight: "82%",
@@ -639,15 +661,26 @@ export default function MapScreen() {
               marginBottom: 20,
             }}
           >
-            <Text
-              style={{
-                fontFamily: Typography.heading,
-                fontSize: 20,
-                color: "#fff",
-              }}
-            >
-              {isChief ? "👑 Chief Dashboard" : "🛡️ Council"}
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: Colors.goldDim, borderWidth: 1, borderColor: Colors.goldBorder, justifyContent: 'center', alignItems: 'center' }}>
+                <Feather name={isChief ? 'award' : 'shield'} size={16} color={Colors.gold} />
+              </View>
+              <View>
+                <Text
+                  style={{
+                    fontFamily: Typography.headline,
+                    fontSize: 19,
+                    color: Colors.textPrimary,
+                    letterSpacing: -0.2,
+                  }}
+                >
+                  {isChief ? "Chief Dashboard" : "Council"}
+                </Text>
+                <Text style={{ fontFamily: Typography.bodyLight, fontSize: 11, color: Colors.textMuted, marginTop: 1 }}>
+                  {isChief ? 'Full command of the tribe' : 'Leader privileges'}
+                </Text>
+              </View>
+            </View>
             <TouchableOpacity
               onPress={() => setShowManagement(false)}
               style={{ padding: 6 }}
@@ -660,21 +693,27 @@ export default function MapScreen() {
               <View
                 style={{
                   marginBottom: 18,
-                  backgroundColor: "rgba(255,255,255,0.05)",
+                  backgroundColor: Colors.glassCardBg,
                   padding: 16,
                   borderRadius: 16,
+                  borderWidth: 1,
+                  borderColor: Colors.glassCardBorder,
                 }}
               >
-                <Text
-                  style={{
-                    fontFamily: Typography.heading,
-                    fontSize: 14,
-                    marginBottom: 12,
-                    color: Colors.accent,
-                  }}
-                >
-                  {selectedTribe.pendingApplicants.length} Pending Applications
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                  <Feather name="user-check" size={13} color={Colors.gold} />
+                  <Text
+                    style={{
+                      fontFamily: Typography.bodyLight,
+                      fontSize: 11,
+                      color: Colors.gold,
+                      letterSpacing: 1.4,
+                      textTransform: 'uppercase',
+                    }}
+                  >
+                    {selectedTribe.pendingApplicants.length} Pending {selectedTribe.pendingApplicants.length === 1 ? 'Application' : 'Applications'}
+                  </Text>
+                </View>
                 {selectedTribe.pendingApplicants.map((appUid) => (
                   <View
                     key={appUid}
@@ -682,22 +721,23 @@ export default function MapScreen() {
                       flexDirection: "row",
                       justifyContent: "space-between",
                       alignItems: "center",
-                      backgroundColor: "rgba(255,255,255,0.04)",
-                      padding: 12,
-                      borderRadius: 10,
+                      backgroundColor: 'rgba(255,255,255,0.04)',
+                      padding: 13,
+                      borderRadius: 12,
                       marginBottom: 8,
+                      borderWidth: 1,
+                      borderColor: 'rgba(255,255,255,0.06)',
                     }}
                   >
                     <TouchableOpacity onPress={() => setProfileViewUid(appUid)}>
                       <Text
                         style={{
-                          fontSize: 13,
-                          fontFamily: Typography.bodySemibold,
-                          color: "#fff",
-                          textDecorationLine: "underline"
+                          fontSize: 14,
+                          fontFamily: Typography.bodyMedium,
+                          color: Colors.textPrimary,
                         }}
                       >
-                        {selectedTribe.memberNames?.[appUid] || `User ${appUid.substring(0, 6)}…`}
+                        {selectedTribe.memberNames?.[appUid] || `Wanderer ${appUid.substring(0, 6)}`}
                       </Text>
                     </TouchableOpacity>
                     <View style={{ flexDirection: "row", gap: 8 }}>
@@ -705,23 +745,25 @@ export default function MapScreen() {
                         onPress={async () => {
                           try {
                             await rejectApplicant(selectedTribe.id, appUid);
-                            if (typeof window !== 'undefined') window.alert("Application rejected successfully.");
+                            if (typeof window !== 'undefined') window.alert("Application rejected.");
                           } catch (e) {
                             if (typeof window !== 'undefined') window.alert("Failed to reject application.");
                           }
                         }}
                         style={{
-                          backgroundColor: Colors.danger,
-                          paddingHorizontal: 12,
-                          paddingVertical: 7,
-                          borderRadius: 8,
+                          backgroundColor: Colors.dangerSoft,
+                          paddingHorizontal: 14,
+                          paddingVertical: 8,
+                          borderRadius: 9999,
+                          borderWidth: 1,
+                          borderColor: Colors.dangerBorder,
                         }}
                       >
                         <Text
                           style={{
-                            color: "#fff",
+                            fontFamily: Typography.bodyMedium,
+                            color: Colors.danger,
                             fontSize: 12,
-                            fontWeight: "bold",
                           }}
                         >
                           Reject
@@ -731,23 +773,25 @@ export default function MapScreen() {
                         onPress={async () => {
                           try {
                             await acceptApplicant(selectedTribe.id, appUid);
-                            if (typeof window !== 'undefined') window.alert("Applicant successfully initiated into the Tribe!");
+                            if (typeof window !== 'undefined') window.alert("Initiated into the tribe.");
                           } catch (e) {
                             if (typeof window !== 'undefined') window.alert("Failed to accept applicant.");
                           }
                         }}
                         style={{
-                          backgroundColor: Colors.primary,
-                          paddingHorizontal: 12,
-                          paddingVertical: 7,
-                          borderRadius: 8,
+                          backgroundColor: Colors.goldDim,
+                          paddingHorizontal: 14,
+                          paddingVertical: 8,
+                          borderRadius: 9999,
+                          borderWidth: 1,
+                          borderColor: Colors.goldBorder,
                         }}
                       >
                         <Text
                           style={{
-                            color: "#fff",
+                            fontFamily: Typography.bodyMedium,
+                            color: Colors.gold,
                             fontSize: 12,
-                            fontWeight: "bold",
                           }}
                         >
                           Accept
@@ -760,22 +804,28 @@ export default function MapScreen() {
             )}
             <View
               style={{
-                backgroundColor: "rgba(255,255,255,0.05)",
+                backgroundColor: Colors.glassCardBg,
                 padding: 16,
                 borderRadius: 16,
                 marginBottom: 18,
+                borderWidth: 1,
+                borderColor: Colors.glassCardBorder,
               }}
             >
-              <Text
-                style={{
-                  fontFamily: Typography.heading,
-                  fontSize: 14,
-                  marginBottom: 10,
-                  color: "#fff",
-                }}
-              >
-                📣 Broadcast Signal
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                <Feather name="radio" size={13} color={Colors.gold} />
+                <Text
+                  style={{
+                    fontFamily: Typography.bodyLight,
+                    fontSize: 11,
+                    color: Colors.gold,
+                    letterSpacing: 1.4,
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  Broadcast Signal
+                </Text>
+              </View>
               <TextInput
                 style={{
                   backgroundColor: "rgba(255,255,255,0.07)",
@@ -803,11 +853,14 @@ export default function MapScreen() {
                   setShowManagement(false);
                 }}
                 style={{
-                  backgroundColor: Colors.accent,
-                  paddingVertical: 13,
-                  borderRadius: 14,
+                  backgroundColor: Colors.glassBtnBg,
+                  height: 56,
+                  borderRadius: 9999,
                   alignItems: "center",
+                  justifyContent: "center",
                   marginTop: 10,
+                  borderWidth: 1,
+                  borderColor: Colors.gold,
                 }}
               >
                 <Text
@@ -821,22 +874,28 @@ export default function MapScreen() {
                 </Text>
               </TouchableOpacity>
             </View>
-            <Text
-              style={{
-                fontFamily: Typography.heading,
-                fontSize: 14,
-                marginBottom: 12,
-                color: "#fff",
-              }}
-            >
-              Members ({selectedTribe.members.length})
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+              <Feather name="users" size={13} color={Colors.gold} />
+              <Text
+                style={{
+                  fontFamily: Typography.bodyLight,
+                  fontSize: 11,
+                  color: Colors.gold,
+                  letterSpacing: 1.4,
+                  textTransform: 'uppercase',
+                }}
+              >
+                Members ({selectedTribe.members.length})
+              </Text>
+            </View>
             <View
               style={{
-                backgroundColor: "rgba(255,255,255,0.05)",
+                backgroundColor: Colors.glassCardBg,
                 borderRadius: 16,
                 overflow: "hidden",
                 marginBottom: 18,
+                borderWidth: 1,
+                borderColor: Colors.glassCardBorder,
               }}
             >
               {selectedTribe.members.map((mUid, idx) => {
@@ -858,14 +917,20 @@ export default function MapScreen() {
                   >
                     <View
                       style={{
-                        width: 30,
-                        height: 30,
-                        borderRadius: 15,
+                        width: 32,
+                        height: 32,
+                        borderRadius: 16,
                         backgroundColor: mIsChief
-                          ? Colors.accent
+                          ? Colors.goldDim
                           : mIsLeader
-                            ? Colors.primary
-                            : "rgba(255,255,255,0.12)",
+                            ? 'rgba(122,143,160,0.20)'
+                            : Colors.glassCardBg,
+                        borderWidth: 1,
+                        borderColor: mIsChief
+                          ? Colors.goldBorder
+                          : mIsLeader
+                            ? 'rgba(122,143,160,0.45)'
+                            : Colors.glassCardBorder,
                         justifyContent: "center",
                         alignItems: "center",
                         marginRight: 11,
@@ -873,8 +938,8 @@ export default function MapScreen() {
                     >
                       <Text
                         style={{
-                          color: "#fff",
-                          fontWeight: "bold",
+                          fontFamily: Typography.bodyMedium,
+                          color: mIsChief ? Colors.gold : mIsLeader ? '#7A8FA0' : Colors.textSecondary,
                           fontSize: 12,
                         }}
                       >
@@ -895,11 +960,11 @@ export default function MapScreen() {
                         </Text>
                       </TouchableOpacity>
                       {mIsChief ? (
-                        <Text style={{ fontSize: 10, color: Colors.accent }}>
+                        <Text style={{ fontFamily: Typography.bodyLight, fontSize: 10, color: Colors.gold, letterSpacing: 0.8 }}>
                           Chief
                         </Text>
                       ) : mIsLeader ? (
-                        <Text style={{ fontSize: 10, color: Colors.textLight }}>
+                        <Text style={{ fontFamily: Typography.bodyLight, fontSize: 10, color: '#7A8FA0', letterSpacing: 0.8 }}>
                           Leader
                         </Text>
                       ) : null}
@@ -918,8 +983,8 @@ export default function MapScreen() {
                             size={16}
                             color={
                               mIsLeader
-                                ? "rgba(255,255,255,0.25)"
-                                : Colors.accent
+                                ? Colors.textMuted
+                                : Colors.gold
                             }
                           />
                         </TouchableOpacity>
@@ -960,22 +1025,26 @@ export default function MapScreen() {
                   }
                 }}
                 style={{
-                  backgroundColor: "rgba(163,83,83,0.18)",
-                  paddingVertical: 16,
-                  borderRadius: 16,
+                  backgroundColor: Colors.dangerSoft,
+                  height: 56,
+                  borderRadius: 9999,
                   alignItems: "center",
+                  justifyContent: "center",
                   borderWidth: 1,
-                  borderColor: Colors.danger,
+                  borderColor: Colors.dangerBorder,
                 }}
               >
-                <Text
-                  style={{
-                    fontFamily: Typography.bodyBold,
-                    color: Colors.danger,
-                  }}
-                >
-                  Dissolve Tribe ☠️
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Feather name="alert-triangle" size={15} color={Colors.danger} />
+                  <Text
+                    style={{
+                      fontFamily: Typography.bodyBold,
+                      color: Colors.danger,
+                    }}
+                  >
+                    Dissolve Tribe
+                  </Text>
+                </View>
               </TouchableOpacity>
             )}
           </ScrollView>
@@ -984,504 +1053,7 @@ export default function MapScreen() {
     );
   };
 
-  const renderTribePanel = () => {
-    if (!selectedTribe) return null;
-    const isChief = selectedTribe.creatorId === user?.uid;
-    const isLeader =
-      isChief || (selectedTribe.leaders || []).includes(user?.uid || "");
-    const isMember = selectedTribe.members.includes(user?.uid || "");
-    const hasApplied = selectedTribe.pendingApplicants.includes(
-      user?.uid || "",
-    );
-    const tribeEvents = events
-      .filter((e) => e.tribeId === selectedTribe.id)
-      .sort((a, b) => a.time.getTime() - b.time.getTime());
-    const spiritKey = (selectedTribe.spiritId || "forest") as string;
-
-    return (
-      <View style={StyleSheet.absoluteFill}>
-        {/* Dark forest backdrop */}
-        <View
-          style={
-            {
-              ...StyleSheet.absoluteFillObject,
-              backgroundColor: "rgba(14, 22, 12, 0.98)",
-            } as any
-          }
-        />
-
-        {/* Header */}
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            paddingHorizontal: 16,
-            paddingTop: 50,
-            paddingBottom: 16,
-            borderBottomWidth: 1,
-            borderBottomColor: "rgba(255,255,255,0.06)",
-          }}
-        >
-          <TouchableOpacity
-            onPress={() => {
-              setSelectedTribe(null);
-              setShowManagement(false);
-              setMode("map");
-            }}
-            style={{ padding: 10, marginRight: 6 }}
-          >
-            <Feather
-              name="arrow-left"
-              size={24}
-              color="rgba(255,255,255,0.8)"
-            />
-          </TouchableOpacity>
-          <Text
-            style={{
-              fontFamily: Typography.heading,
-              fontSize: 22,
-              color: "#fff",
-              flex: 1,
-            }}
-            numberOfLines={1}
-          >
-            {selectedTribe.name}
-          </Text>
-          {isLeader && (
-            <TouchableOpacity
-              onPress={() => setShowManagement(true)}
-              style={{
-                padding: 9,
-                backgroundColor: "rgba(230,161,92,0.15)",
-                borderRadius: 20,
-                borderWidth: 1,
-                borderColor: "rgba(230,161,92,0.35)",
-              }}
-            >
-              <Feather name="shield" size={18} color={Colors.accent} />
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {/* Spirit + Bonfire Hero */}
-        <View
-          style={{
-            marginHorizontal: 16,
-            marginTop: 16,
-            marginBottom: 6,
-            backgroundColor: "rgba(38, 24, 8, 0.75)",
-            borderRadius: 24,
-            padding: 18,
-            flexDirection: "row",
-            alignItems: "flex-end",
-            borderWidth: 1,
-            borderColor: "rgba(255,255,255,0.06)",
-          }}
-        >
-          <Image
-            source={SPIRIT_ASSETS[spiritKey] || SPIRIT_ASSETS.forest}
-            style={{ width: 160, height: 160, resizeMode: "contain" }}
-          />
-          <Image
-            source={require("../assets/bonfire.png")}
-            style={
-              {
-                width: 64,
-                height: 64,
-                resizeMode: "contain",
-                marginLeft: 12,
-                overflow: "visible",
-                filter: "drop-shadow(0 0 12px rgba(255,140,0,0.7))",
-              } as any
-            }
-          />
-          <View style={{ flex: 1, paddingLeft: 14 }}>
-            <Text
-              style={{
-                fontFamily: Typography.heading,
-                fontSize: 17,
-                color: "#fff",
-                marginBottom: 4,
-              }}
-              numberOfLines={1}
-            >
-              {selectedTribe.name}
-            </Text>
-            <Text
-              style={{
-                fontSize: 12,
-                color: Colors.accent,
-                fontWeight: "bold",
-                marginBottom: 6,
-              }}
-            >
-              🌿 {selectedTribe.members.length} Tribesmen
-            </Text>
-            <Text
-              style={{
-                fontFamily: Typography.body,
-                color: "rgba(255,255,255,0.55)",
-                fontSize: 12,
-                lineHeight: 17,
-              }}
-              numberOfLines={3}
-            >
-              {selectedTribe.description}
-            </Text>
-          </View>
-        </View>
-
-        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 80 }}>
-          {/* Member Actions */}
-          {!isMember && !hasApplied && (
-            <TouchableOpacity
-              style={{
-                backgroundColor: Colors.accent,
-                paddingVertical: 15,
-                borderRadius: 16,
-                alignItems: "center",
-                marginBottom: 16,
-              }}
-              onPress={async () => {
-                await applyToTribe(selectedTribe.id);
-                if (typeof window !== 'undefined') window.alert("Your smoke signal was sent to the chief!");
-              }}
-            >
-              <Text
-                style={{
-                  fontFamily: Typography.bodyBold,
-                  color: "#fff",
-                  fontSize: 15,
-                }}
-              >
-                Apply to Tribe 🔥
-              </Text>
-            </TouchableOpacity>
-          )}
-          {!isMember && hasApplied && (
-            <View
-              style={{
-                backgroundColor: "rgba(255,255,255,0.07)",
-                paddingVertical: 15,
-                borderRadius: 16,
-                alignItems: "center",
-                marginBottom: 16,
-              }}
-            >
-              <Text
-                style={{
-                  fontFamily: Typography.bodyBold,
-                  color: "rgba(255,255,255,0.4)",
-                  fontSize: 15,
-                }}
-              >
-                Application Pending…
-              </Text>
-            </View>
-          )}
-          {isMember && (
-            <TouchableOpacity
-              style={{
-                backgroundColor: "rgba(255,255,255,0.15)",
-                paddingVertical: 15,
-                borderRadius: 16,
-                alignItems: "center",
-                marginBottom: 12,
-                flexDirection: "row",
-                justifyContent: "center",
-              }}
-              onPress={() => {
-                try {
-                  const l = `${window.location.origin}/?invite=${selectedTribe.id}`;
-                  navigator.clipboard.writeText(l);
-                  alert("Invite link copied to clipboard!");
-                } catch (e) {
-                  alert("Failed to copy link");
-                }
-              }}
-            >
-              <Feather name="link" size={18} color="#fff" style={{ marginRight: 8 }} />
-              <Text style={{ fontFamily: Typography.bodyBold, color: "#fff", fontSize: 15 }}>
-                Copy Invite Link
-              </Text>
-            </TouchableOpacity>
-          )}
-          {isMember && !isChief && (
-            <TouchableOpacity
-              style={{
-                backgroundColor: "rgba(163,83,83,0.2)",
-                paddingVertical: 15,
-                borderRadius: 16,
-                alignItems: "center",
-                marginBottom: 16,
-                borderWidth: 1,
-                borderColor: Colors.danger,
-              }}
-              onPress={() =>
-                Alert.alert("Leave Tribe", "Are you sure?", [
-                  { text: "Cancel", style: "cancel" },
-                  {
-                    text: "Leave",
-                    style: "destructive",
-                    onPress: async () => {
-                      await leaveTribe(selectedTribe.id);
-                      setSelectedTribe(null);
-                    },
-                  },
-                ])
-              }
-            >
-              <Text
-                style={{
-                  fontFamily: Typography.bodyBold,
-                  color: Colors.danger,
-                  fontSize: 15,
-                }}
-              >
-                Leave Tribe
-              </Text>
-            </TouchableOpacity>
-          )}
-
-          {/* 🔥 Campfire — Announcements */}
-          <Text
-            style={{
-              fontFamily: Typography.heading,
-              fontSize: 17,
-              color: Colors.accent,
-              marginBottom: 12,
-              marginTop: 4,
-            }}
-          >
-            🔥 Campfire
-          </Text>
-          {selectedTribe.announcements.length === 0 ? (
-            <Text
-              style={{
-                color: "rgba(255,255,255,0.3)",
-                fontStyle: "italic",
-                marginBottom: 20,
-                fontFamily: Typography.body,
-              }}
-            >
-              No signs of smoke yet.
-            </Text>
-          ) : (
-            <View style={{ marginBottom: 20 }}>
-              {selectedTribe.announcements
-                .slice()
-                .reverse()
-                .map((ann, i) => (
-                  <View
-                    key={i}
-                    style={{
-                      backgroundColor: "rgba(255,255,255,0.05)",
-                      padding: 14,
-                      borderRadius: 14,
-                      marginBottom: 8,
-                      borderWidth: 1,
-                      borderColor: "rgba(255,255,255,0.07)",
-                    }}
-                  >
-                    <Text
-                      style={{
-                        fontFamily: Typography.body,
-                        color: "rgba(255,255,255,0.82)",
-                        fontSize: 14,
-                        lineHeight: 21,
-                      }}
-                    >
-                      {ann.text}
-                    </Text>
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        justifyContent: "space-between",
-                        marginTop: 8,
-                        paddingTop: 8,
-                        borderTopWidth: 1,
-                        borderTopColor: "rgba(255,255,255,0.06)",
-                      }}
-                    >
-                      <TouchableOpacity onPress={() => setProfileViewUid(ann.authorId)}>
-                        <Text
-                          style={{
-                            fontSize: 11,
-                            color: Colors.accent,
-                            fontWeight: "bold",
-                            textDecorationLine: "underline",
-                          }}
-                        >
-                          {ann.authorName}
-                        </Text>
-                      </TouchableOpacity>
-                      <Text
-                        style={{ fontSize: 11, color: "rgba(255,255,255,0.3)" }}
-                      >
-                        {format(ann.createdAt, "MMM d, HH:mm")}
-                      </Text>
-                    </View>
-                  </View>
-                ))}
-            </View>
-          )}
-
-          {/* 🌲 Gatherings — Events */}
-          <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: 12,
-            }}
-          >
-            <Text
-              style={{
-                fontFamily: Typography.heading,
-                fontSize: 17,
-                color: Colors.accent,
-              }}
-            >
-              🌲 Gatherings
-            </Text>
-            {isLeader && (
-              <TouchableOpacity
-                onPress={() => {
-                  setDraft({
-                    ...draft,
-                    tribeId: selectedTribe.id,
-                    categoryId: selectedTribe.categoryId as any,
-                  });
-                  setMode("wizard_details");
-                }}
-                style={{
-                  backgroundColor: "rgba(230,161,92,0.15)",
-                  paddingHorizontal: 14,
-                  paddingVertical: 7,
-                  borderRadius: 20,
-                  borderWidth: 1,
-                  borderColor: "rgba(230,161,92,0.4)",
-                }}
-              >
-                <Text
-                  style={{
-                    color: Colors.accent,
-                    fontSize: 12,
-                    fontWeight: "bold",
-                  }}
-                >
-                  + New
-                </Text>
-              </TouchableOpacity>
-            )}
-          </View>
-          {tribeEvents.length === 0 ? (
-            <Text
-              style={{
-                color: "rgba(255,255,255,0.3)",
-                fontStyle: "italic",
-                fontFamily: Typography.body,
-                marginBottom: 20,
-              }}
-            >
-              No upcoming gatherings.
-            </Text>
-          ) : (
-            tribeEvents.map((e) => (
-              <TouchableOpacity
-                key={e.id}
-                onPress={() => {
-                  setSelectedEvent(e);
-                  setMode("event_chat");
-                }}
-                style={{
-                  backgroundColor: "rgba(255,255,255,0.05)",
-                  padding: 14,
-                  borderRadius: 14,
-                  marginBottom: 10,
-                  borderWidth: 1,
-                  borderColor: "rgba(255,255,255,0.07)",
-                }}
-              >
-                <View
-                  style={{
-                    flexDirection: "row",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                  }}
-                >
-                  <Text
-                    style={{
-                      fontFamily: Typography.heading,
-                      fontSize: 14,
-                      color: "#fff",
-                      flex: 1,
-                    }}
-                  >
-                    {e.title}
-                  </Text>
-                  {e.cyclicalRule && (
-                    <View
-                      style={{
-                        backgroundColor: Colors.accent,
-                        paddingHorizontal: 8,
-                        paddingVertical: 3,
-                        borderRadius: 10,
-                      }}
-                    >
-                      <Text
-                        style={{
-                          color: "#fff",
-                          fontSize: 10,
-                          fontWeight: "bold",
-                        }}
-                      >
-                        {e.cyclicalRule.toUpperCase()}
-                      </Text>
-                    </View>
-                  )}
-                  {e.status === "finalized" && (
-                    <View
-                      style={{
-                        backgroundColor: Colors.primary,
-                        paddingHorizontal: 8,
-                        paddingVertical: 3,
-                        borderRadius: 10,
-                        marginLeft: 4,
-                      }}
-                    >
-                      <Text
-                        style={{
-                          color: "#fff",
-                          fontSize: 10,
-                          fontWeight: "bold",
-                        }}
-                      >
-                        DONE
-                      </Text>
-                    </View>
-                  )}
-                </View>
-                <Text
-                  style={{
-                    color: "rgba(255,255,255,0.45)",
-                    marginTop: 4,
-                    fontFamily: Typography.body,
-                    fontSize: 12,
-                  }}
-                >
-                  {format(e.time, "EEEE, MMM d at h:mm a")}
-                </Text>
-              </TouchableOpacity>
-            ))
-          )}
-        </ScrollView>
-
-        {/* Management overlay (leader only) */}
-        {showManagement && renderManagementOverlay()}
-      </View>
-    );
-  };
+  ;
 
   const renderHUD = () => {
     if (mode !== "map") return null;
@@ -1491,8 +1063,8 @@ export default function MapScreen() {
           style={styles.settingsBtn}
           onPress={() => navigation.navigate("Settings")}
         >
-          <BlurView intensity={65} tint="light" style={styles.iconWrapper}>
-            <Text style={{ fontSize: 16 }}>⚙️</Text>
+          <BlurView intensity={65} tint="dark" style={styles.iconWrapper}>
+            <Feather name="settings" size={18} color={Colors.text} />
           </BlurView>
         </TouchableOpacity>
 
@@ -1511,7 +1083,7 @@ export default function MapScreen() {
             }
           }}
         >
-          <BlurView intensity={65} tint="light" style={styles.iconWrapper}>
+          <BlurView intensity={65} tint="dark" style={styles.iconWrapper}>
             <Feather name="navigation" size={18} color={Colors.text} />
           </BlurView>
         </TouchableOpacity>
@@ -1522,14 +1094,14 @@ export default function MapScreen() {
             setMode("search_map");
           }}
         >
-          <BlurView intensity={65} tint="light" style={[styles.iconWrapper]}>
+          <BlurView intensity={65} tint="dark" style={[styles.iconWrapper]}>
             <Feather name="search" size={18} color={Colors.text} />
           </BlurView>
         </TouchableOpacity>
 
         <View style={styles.topLeft} pointerEvents="box-none">
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 15 }}>
-            <BlurView intensity={70} tint="light" style={styles.balancePill}>
+            <BlurView intensity={70} tint="dark" style={styles.balancePill}>
               <Text style={styles.balanceText}>
                 {user?.tokens}{" "}
                 <Image
@@ -1546,18 +1118,18 @@ export default function MapScreen() {
                   setMode("tribe_panel");
                 }}
                 style={{
-                  backgroundColor: "rgba(255,255,255,0.7)",
+                  backgroundColor: Colors.glassBtnBg,
                   borderRadius: 20,
                   width: 40,
                   height: 40,
                   justifyContent: "center",
                   alignItems: "center",
-                  shadowColor: "#000",
-                  shadowOpacity: 0.1,
-                  shadowRadius: 10,
-                  borderWidth: 1,
-                  borderColor: "rgba(255,255,255,0.4)",
                   marginLeft: 4,
+                  shadowColor: Colors.gold,
+                  shadowOpacity: 0.45,
+                  shadowRadius: 8,
+                  shadowOffset: { width: 0, height: 0 },
+                  elevation: 5,
                 }}
               >
                 <View style={{ width: 40, height: 40, borderRadius: 20, overflow: "hidden", alignItems: "center" }}>
@@ -1575,7 +1147,7 @@ export default function MapScreen() {
               style={styles.plusBtn}
               onPress={() => setMode("wizard_details")}
             >
-              <Feather name="plus" size={28} color="#fff" />
+              <Feather name="plus" size={28} color={Colors.textPrimary} />
             </TouchableOpacity>
 
             {joinedEvents.length > 0 && (
@@ -1606,7 +1178,7 @@ export default function MapScreen() {
         <View style={styles.bottomBar} pointerEvents="box-none">
           <BlurView
             intensity={60}
-            tint="light"
+            tint="dark"
             style={styles.dateSliderContainer}
           >
             {canScrollLeft && (
@@ -1622,7 +1194,7 @@ export default function MapScreen() {
                 <Feather
                   name="chevron-left"
                   size={16}
-                  color={Colors.primaryDark}
+                  color="rgba(255,255,255,0.75)"
                 />
               </TouchableOpacity>
             )}
@@ -1686,15 +1258,15 @@ export default function MapScreen() {
           >
             <BlurView
               intensity={70}
-              tint="light"
+              tint="dark"
               style={[
                 styles.filterBtnWrapper,
                 Object.keys(activeFilters).length +
                   activeAgeFilters.length +
                   activeGenderFilters.length >
                   0 && {
-                  backgroundColor: Colors.primary,
-                  borderColor: Colors.primary,
+                  backgroundColor: Colors.gold,
+                  borderColor: Colors.gold,
                 },
               ]}
             >
@@ -1704,7 +1276,7 @@ export default function MapScreen() {
                   Object.keys(activeFilters).length +
                     activeAgeFilters.length +
                     activeGenderFilters.length >
-                    0 && { color: "#fff" },
+                    0 && { color: '#1A2421' },
                 ]}
               >
                 Filters{" "}
@@ -1713,7 +1285,7 @@ export default function MapScreen() {
                   activeGenderFilters.length >
                 0
                   ? `(${Object.keys(activeFilters).length + activeAgeFilters.length + activeGenderFilters.length})`
-                  : "☰"}
+                  : ""}
               </Text>
             </BlurView>
           </TouchableOpacity>
@@ -1736,7 +1308,7 @@ export default function MapScreen() {
       >
         <BlurView
           intensity={90}
-          tint="light"
+          tint="dark"
           style={{ padding: 15, borderRadius: 24, overflow: "hidden" }}
         >
           <View style={{ flexDirection: "row", alignItems: "center" }}>
@@ -1751,7 +1323,7 @@ export default function MapScreen() {
                 },
               ]}
               placeholder="Search city, neighborhood..."
-              placeholderTextColor="#999"
+              placeholderTextColor={Colors.textPlaceholder}
               autoFocus
               value={wizardQuery}
               onChangeText={searchWizardLocation}
@@ -1775,7 +1347,7 @@ export default function MapScreen() {
                   style={{
                     paddingVertical: 12,
                     borderBottomWidth: 1,
-                    borderBottomColor: "rgba(0,0,0,0.05)",
+                    borderBottomColor: Colors.hairline,
                   }}
                   onPress={() => {
                     const [lng, lat] = feat.center;
@@ -1810,12 +1382,12 @@ export default function MapScreen() {
 
   const renderWizardDetails = () => (
     <View style={styles.glassWrapperBottom}>
-      <BlurView intensity={85} tint="light" style={styles.glassPanelBottom}>
+      <BlurView intensity={85} tint="dark" style={styles.glassPanelBottom}>
         <Text style={styles.panelTitle}>Design your tribe's event</Text>
         <TextInput
           style={styles.input}
           placeholder="Title (e.g. Morning Run)"
-          placeholderTextColor="#999"
+          placeholderTextColor={Colors.textPlaceholder}
           value={draft.title}
           onChangeText={(t) => setDraft({ ...draft, title: t })}
         />
@@ -1941,8 +1513,8 @@ export default function MapScreen() {
                 style={[
                   styles.wizardSubCat,
                   draft.ageGroup === age && {
-                    backgroundColor: Colors.primary,
-                    borderColor: Colors.primary,
+                    backgroundColor: Colors.goldDim,
+                    borderColor: Colors.goldBorder,
                   },
                 ]}
                 onPress={() => setDraft({ ...draft, ageGroup: age })}
@@ -1983,8 +1555,8 @@ export default function MapScreen() {
               style={[
                 styles.wizardSubCat,
                 draft.gender === gender && {
-                  backgroundColor: Colors.primary,
-                  borderColor: Colors.primary,
+                  backgroundColor: Colors.goldDim,
+                  borderColor: Colors.goldBorder,
                 },
               ]}
               onPress={() => setDraft({ ...draft, gender })}
@@ -2012,11 +1584,11 @@ export default function MapScreen() {
             width: "92%",
             padding: "16px",
             borderRadius: "16px",
-            border: "1px solid rgba(255,255,255,0.8)",
-            backgroundColor: "rgba(255,255,255,0.8)",
+            border: `1px solid ${Colors.borderInput}`,
+            backgroundColor: Colors.bgInput,
             fontFamily: Typography.body,
             fontSize: "15px",
-            color: Colors.text,
+            color: Colors.textPrimary,
             marginBottom: "15px",
             alignSelf: "center",
             boxSizing: "border-box",
@@ -2026,7 +1598,7 @@ export default function MapScreen() {
         <TextInput
           style={styles.input}
           placeholder="Location Base (City/Street)"
-          placeholderTextColor="#999"
+          placeholderTextColor={Colors.textPlaceholder}
           value={wizardQuery}
           onChangeText={searchWizardLocation}
         />
@@ -2056,7 +1628,7 @@ export default function MapScreen() {
         <Text
           style={{
             fontFamily: Typography.body,
-            color: "#666",
+            color: Colors.textSecondary,
             marginBottom: 10,
             marginTop: -15,
           }}
@@ -2081,8 +1653,8 @@ export default function MapScreen() {
                 styles.wizardSubCat,
                 (draft.cyclicalRule === rule ||
                   (rule === "once" && !draft.cyclicalRule)) && {
-                  backgroundColor: Colors.primary,
-                  borderColor: Colors.primary,
+                  backgroundColor: Colors.goldDim,
+                  borderColor: Colors.goldBorder,
                 },
               ]}
             >
@@ -2102,6 +1674,44 @@ export default function MapScreen() {
             </TouchableOpacity>
           ))}
         </ScrollView>
+
+        {/* Visibility */}
+        <Text
+          style={{
+            fontFamily: Typography.bodySemibold,
+            color: Colors.text,
+            marginBottom: 5,
+            marginTop: 10,
+            alignSelf: "flex-start",
+            marginLeft: "4%",
+          }}
+        >
+          Visibility
+        </Text>
+        <View style={{ flexDirection: "row", gap: 10, marginBottom: 20, paddingHorizontal: "4%" }}>
+          <TouchableOpacity
+            style={[
+              styles.wizardSubCat,
+              { flexDirection: "row", gap: 6, alignItems: "center" },
+              !draft.isPrivate && { backgroundColor: Colors.goldDim, borderColor: Colors.goldBorder },
+            ]}
+            onPress={() => setDraft({ ...draft, isPrivate: false })}
+          >
+            <Feather name="globe" size={13} color={!draft.isPrivate ? "#fff" : Colors.text} />
+            <Text style={[styles.wizardSubCatText, !draft.isPrivate && { color: "#fff" }]}>Public</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.wizardSubCat,
+              { flexDirection: "row", gap: 6, alignItems: "center" },
+              draft.isPrivate && { backgroundColor: Colors.goldDim, borderColor: Colors.goldBorder },
+            ]}
+            onPress={() => setDraft({ ...draft, isPrivate: true })}
+          >
+            <Feather name="lock" size={13} color={draft.isPrivate ? "#fff" : Colors.text} />
+            <Text style={[styles.wizardSubCatText, draft.isPrivate && { color: "#fff" }]}>Private · Invite Only</Text>
+          </TouchableOpacity>
+        </View>
 
         <View style={styles.row}>
           <TouchableOpacity
@@ -2160,702 +1770,11 @@ export default function MapScreen() {
     </View>
   );
 
-  const renderEventChat = () => {
-    if (!selectedEvent) return null;
-    const isJoined = selectedEvent.participants.includes(user?.uid || "");
-    const isHost = selectedEvent.creatorId === user?.uid;
-    const isPastEvent =
-      selectedEvent.time && new Date(selectedEvent.time) <= new Date();
-    const isFinalized =
-      selectedEvent.status === "finalized" ||
-      selectedEvent.status === "cancelled";
-    const creatorStats = creatorStatsCache[selectedEvent.creatorId] || {
-      name: "Unknown",
-      ratingSum: 0,
-      ratingCount: 0,
-    };
-    const myFeedback = userFeedbackCache[selectedEvent.id];
-    const isPrivateTribe = selectedEvent.isTribePrivate;
-    const tribeInfo = selectedEvent.tribeId
-      ? tribes.find((t) => t.id === selectedEvent.tribeId)
-      : null;
-
-    return (
-      <View style={styles.glassWrapperBottomFull}>
-        <BlurView
-          intensity={90}
-          tint="light"
-          style={styles.glassPanelBottomFull}
-        >
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "flex-start",
-              marginBottom: 16,
-            }}
-          >
-            <View style={{ flex: 1 }}>
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  marginBottom: 6,
-                  flexWrap: "wrap",
-                  gap: 6,
-                }}
-              >
-                <Text
-                  style={{
-                    fontFamily: Typography.heading,
-                    fontSize: 24,
-                    color: Colors.text,
-                    marginRight: 6,
-                  }}
-                  numberOfLines={1}
-                >
-                  {selectedEvent.title}
-                </Text>
-                {isPrivateTribe && (
-                  <View
-                    style={{
-                      backgroundColor: "rgba(0,0,0,0.8)",
-                      paddingHorizontal: 8,
-                      paddingVertical: 4,
-                      borderRadius: 12,
-                    }}
-                  >
-                    <Text
-                      style={{
-                        color: "#fff",
-                        fontSize: 10,
-                        fontWeight: "bold",
-                      }}
-                    >
-                      PRIVATE TRIBE
-                    </Text>
-                  </View>
-                )}
-                {isFinalized && (
-                  <View
-                    style={{
-                      backgroundColor:
-                        selectedEvent.status === "cancelled"
-                          ? Colors.danger
-                          : Colors.primary,
-                      paddingHorizontal: 8,
-                      paddingVertical: 4,
-                      borderRadius: 12,
-                    }}
-                  >
-                    <Text
-                      style={{
-                        color: "#fff",
-                        fontSize: 10,
-                        fontWeight: "bold",
-                      }}
-                    >
-                      {selectedEvent.status?.toUpperCase() || ""}
-                    </Text>
-                  </View>
-                )}
-              </View>
-              <Text
-                style={{
-                  fontFamily: Typography.body,
-                  fontSize: 13,
-                  color: Colors.textLight,
-                }}
-              >
-                {selectedEvent.participants.length} /{" "}
-                {selectedEvent.participantLimit} Attending •{" "}
-                {selectedEvent.time
-                  ? format(new Date(selectedEvent.time), "MMM d, h:mm a")
-                  : "TBD"}
-              </Text>
-              <View style={{ flexDirection: "row", alignItems: "center", marginTop: 8 }}>
-                <Text style={{ fontFamily: Typography.bodySemibold, fontSize: 13, color: Colors.text }}>
-                  Host:{" "}
-                </Text>
-                <TouchableOpacity onPress={() => setProfileViewUid(selectedEvent.creatorId)}>
-                  <Text
-                    style={{
-                      fontFamily: Typography.bodySemibold,
-                      fontSize: 13,
-                      color: Colors.text,
-                      textDecorationLine: "underline",
-                    }}
-                  >
-                    {creatorStats.name || "Unknown"}
-                  </Text>
-                </TouchableOpacity>
-                <Text style={{ fontSize: 13, marginLeft: 8 }}>
-                  {renderMoons(creatorStats.ratingSum, creatorStats.ratingCount)}
-                </Text>
-              </View>
-              {tribeInfo && !isPrivateTribe && (
-                <TouchableOpacity
-                  onPress={() => {
-                    setSelectedTribe(tribeInfo);
-                    setMode("map");
-                  }}
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    marginTop: 8,
-                    backgroundColor: "rgba(140,179,105,0.15)",
-                    alignSelf: "flex-start",
-                    paddingHorizontal: 10,
-                    paddingVertical: 6,
-                    borderRadius: 16,
-                    borderWidth: 1,
-                    borderColor: "rgba(140,179,105,0.3)",
-                  }}
-                >
-                  <Image
-                    source={SPIRIT_ASSETS[tribeInfo.spiritId || "forest"]}
-                    style={{ width: 16, height: 16, marginRight: 6 }}
-                  />
-                  <Text
-                    style={{
-                      fontSize: 12,
-                      color: Colors.primaryDark,
-                      fontWeight: "bold",
-                    }}
-                  >
-                    Hosted by {tribeInfo.name}
-                  </Text>
-                </TouchableOpacity>
-              )}
-            </View>
-            {isHost && !isFinalized && !isPastEvent && (
-              <TouchableOpacity
-                onPress={async () => {
-                  if (selectedEvent.id === "tutorial-dummy") {
-                    setSelectedEvent(null);
-                    setMode("map");
-                    return;
-                  }
-                  if (
-                    window.confirm(
-                      "Are you sure you want to cancel this event? 5 leaves will be refunded.",
-                    )
-                  ) {
-                    try {
-                      await deleteEvent(selectedEvent.id);
-                      setSelectedEvent(null);
-                      setMode("map");
-                    } catch (e: any) {
-                      alert("Error: " + e.message);
-                    }
-                  }
-                }}
-                style={{ padding: 8 }}
-              >
-                <Feather name="trash-2" size={20} color={Colors.danger} />
-              </TouchableOpacity>
-            )}
-            <TouchableOpacity
-              onPress={() => {
-                setSelectedEvent(null);
-                setMode("map");
-              }}
-              style={{ padding: 8 }}
-            >
-              <Feather name="x" size={22} color={Colors.text} />
-            </TouchableOpacity>
-          </View>
-          <Text
-            style={{
-              fontFamily: Typography.bodySemibold,
-              color: Colors.primaryDark,
-              marginBottom: 12,
-            }}
-            numberOfLines={1}
-          >
-            📍 {selectedEvent.location.address || "Precise map location pinned"}
-          </Text>
-
-          {/* Content Area */}
-          {!isJoined && !isHost ? (
-            <View style={styles.chatLocked}>
-              <Text style={styles.chatLockedIco}>💬</Text>
-              <Text style={styles.chatLockedTitle}>Tribal Chat is Locked</Text>
-              <Text style={styles.chatLockedSub}>
-                Commit 1{" "}
-                <Image
-                  source={require("../assets/leaf.png")}
-                  style={styles.inlineIcon}
-                />{" "}
-                to join the event and open communications with this tribe.
-              </Text>
-              <TouchableOpacity
-                style={[styles.btnPrimaryFull, isFinalized && { opacity: 0.5 }]}
-                disabled={isFinalized}
-                onPress={handleJoin}
-              >
-                <Text style={styles.btnPrimaryText}>
-                  {isFinalized ? "Event Concluded" : "Join Tribe (1 🍃)"}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <View style={{ flex: 1 }}>
-              <ScrollView
-                style={styles.chatScroll}
-                contentContainerStyle={{
-                  paddingVertical: 10,
-                  paddingBottom: 20,
-                }}
-              >
-                <View style={styles.chatBubble}>
-                  <Text style={styles.chatText}>
-                    Welcome to the tribe! See you there.
-                  </Text>
-                </View>
-              </ScrollView>
-
-              {/* Finalize Mode for Host */}
-              {isHost && isPastEvent && !isFinalized && (
-                <View
-                  style={{
-                    backgroundColor: "#fff",
-                    borderRadius: 16,
-                    padding: 16,
-                    shadowColor: "#000",
-                    shadowOpacity: 0.05,
-                    shadowRadius: 10,
-                    marginTop: 10,
-                    borderWidth: 1,
-                    borderColor: Colors.accent,
-                  }}
-                >
-                  <Text
-                    style={{
-                      fontFamily: Typography.heading,
-                      fontSize: 16,
-                      color: Colors.accent,
-                      marginBottom: 8,
-                    }}
-                  >
-                    🔥 The Event Has Passed
-                  </Text>
-                  <Text
-                    style={{
-                      fontFamily: Typography.body,
-                      fontSize: 13,
-                      color: Colors.textLight,
-                      marginBottom: 16,
-                    }}
-                  >
-                    Mark who attended. You will receive your 5 leaves back if
-                    you confirm it happened.
-                  </Text>
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: 10,
-                      marginBottom: 16,
-                    }}
-                  >
-                    <TouchableOpacity
-                      style={{
-                        flex: 1,
-                        padding: 12,
-                        borderRadius: 12,
-                        backgroundColor:
-                          feedbackAnswer.eventHappened === true
-                            ? Colors.primary
-                            : "#f0f0f0",
-                        alignItems: "center",
-                      }}
-                      onPress={() =>
-                        setFeedbackAnswer({
-                          ...feedbackAnswer,
-                          eventHappened: true,
-                        })
-                      }
-                    >
-                      <Text
-                        style={{
-                          color:
-                            feedbackAnswer.eventHappened === true
-                              ? "#fff"
-                              : "#666",
-                          fontWeight: "bold",
-                        }}
-                      >
-                        It Happened 👍
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={{
-                        flex: 1,
-                        padding: 12,
-                        borderRadius: 12,
-                        backgroundColor:
-                          feedbackAnswer.eventHappened === false
-                            ? Colors.danger
-                            : "#f0f0f0",
-                        alignItems: "center",
-                      }}
-                      onPress={() =>
-                        setFeedbackAnswer({
-                          ...feedbackAnswer,
-                          eventHappened: false,
-                        })
-                      }
-                    >
-                      <Text
-                        style={{
-                          color:
-                            feedbackAnswer.eventHappened === false
-                              ? "#fff"
-                              : "#666",
-                          fontWeight: "bold",
-                        }}
-                      >
-                        Cancelled 👎
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                  {feedbackAnswer.eventHappened &&
-                    selectedEvent.participants.length > 1 && (
-                      <View style={{ marginBottom: 16 }}>
-                        <Text
-                          style={{
-                            fontFamily: Typography.bodySemibold,
-                            marginBottom: 8,
-                          }}
-                        >
-                          Tick who showed up:
-                        </Text>
-                        {selectedEvent.participants
-                          .filter((p) => p !== user.uid)
-                          .map((p) => (
-                            <TouchableOpacity
-                              key={p}
-                              onPress={() => {
-                                setFinalizeChecked((prev) =>
-                                  prev.includes(p)
-                                    ? prev.filter((x) => x !== p)
-                                    : [...prev, p],
-                                );
-                              }}
-                              style={{
-                                flexDirection: "row",
-                                alignItems: "center",
-                                marginBottom: 8,
-                              }}
-                            >
-                              <View
-                                style={{
-                                  width: 24,
-                                  height: 24,
-                                  borderRadius: 12,
-                                  borderWidth: 2,
-                                  borderColor: finalizeChecked.includes(p)
-                                    ? Colors.primary
-                                    : "#ddd",
-                                  backgroundColor: finalizeChecked.includes(p)
-                                    ? Colors.primary
-                                    : "transparent",
-                                  marginRight: 10,
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                }}
-                              >
-                                {finalizeChecked.includes(p) && (
-                                  <Feather
-                                    name="check"
-                                    size={14}
-                                    color="#fff"
-                                  />
-                                )}
-                              </View>
-                              <Text
-                                style={{
-                                  fontFamily: Typography.body,
-                                  color: Colors.text,
-                                }}
-                              >
-                                User {p.substring(0, 5)}...
-                              </Text>
-                            </TouchableOpacity>
-                          ))}
-                      </View>
-                    )}
-                  {feedbackAnswer.eventHappened && !selectedEvent.tribeId && (
-                    <TouchableOpacity
-                      onPress={() => setFormTribeChecked(!formTribeChecked)}
-                      style={{ flexDirection: "row", alignItems: "center", marginBottom: 15 }}
-                    >
-                      <View style={{ width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: formTribeChecked ? Colors.primary : "#ccc", backgroundColor: formTribeChecked ? Colors.primary : "transparent", alignItems: "center", justifyContent: "center", marginRight: 10 }}>
-                        {formTribeChecked && <Feather name="check" size={14} color="#fff" />}
-                      </View>
-                      <Text style={{ fontFamily: Typography.bodySemibold, color: Colors.text }}>
-                        Form a permanent Tribe from these attendees
-                      </Text>
-                    </TouchableOpacity>
-                  )}
-                  <TouchableOpacity
-                    disabled={feedbackAnswer.eventHappened === undefined}
-                    style={[
-                      styles.btnPrimaryFull,
-                      {
-                        opacity:
-                          feedbackAnswer.eventHappened !== undefined ? 1 : 0.5,
-                        marginTop: 0,
-                      },
-                    ]}
-                    onPress={async () => {
-                      await finalizeEvent(
-                        selectedEvent.id,
-                        finalizeChecked,
-                        feedbackAnswer.eventHappened!,
-                      );
-                      if (
-                        feedbackAnswer.eventHappened &&
-                        !selectedEvent.tribeId &&
-                        formTribeChecked
-                      ) {
-                        setWizardDraft((prev) => ({
-                          ...prev,
-                          fromEventId: selectedEvent.id,
-                          fromAttendees: [user.uid, ...finalizeChecked],
-                        }));
-                        setMode("create_tribe_wizard");
-                        setWizardStep(1);
-                      } else {
-                        setSelectedEvent(null);
-                        setMode("map");
-                        alert("Event Finalized! Leaves refunded.");
-                      }
-                    }}
-                  >
-                    <Text style={styles.btnPrimaryText}>Lock & Finalize</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-
-              {/* Feedback Mode for Participant */}
-              {!isHost &&
-                isJoined &&
-                (isFinalized || isPastEvent) &&
-                myFeedback === "none" &&
-                !feedbackSubmitted[selectedEvent.id] && (
-                  <View
-                    style={{
-                      backgroundColor: "#fff",
-                      borderRadius: 16,
-                      padding: 16,
-                      shadowColor: "#000",
-                      shadowOpacity: 0.05,
-                      shadowRadius: 10,
-                      marginTop: 10,
-                      borderWidth: 1,
-                      borderColor: Colors.accent,
-                    }}
-                  >
-                    <Text
-                      style={{
-                        fontFamily: Typography.heading,
-                        fontSize: 16,
-                        color: Colors.accent,
-                        marginBottom: 8,
-                      }}
-                    >
-                      🌿 Claim Your Leaf Back
-                    </Text>
-                    <Text
-                      style={{
-                        fontFamily: Typography.body,
-                        fontSize: 13,
-                        color: Colors.textLight,
-                        marginBottom: 16,
-                      }}
-                    >
-                      Fill out this quick survey to immediately get your 1 leaf
-                      back.
-                    </Text>
-
-                    <Text
-                      style={{
-                        fontFamily: Typography.bodySemibold,
-                        marginBottom: 8,
-                      }}
-                    >
-                      Did the event actually happen?
-                    </Text>
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                        gap: 10,
-                        marginBottom: 16,
-                      }}
-                    >
-                      <TouchableOpacity
-                        style={{
-                          flex: 1,
-                          padding: 10,
-                          borderRadius: 12,
-                          backgroundColor:
-                            feedbackAnswer.eventHappened === true
-                              ? Colors.primary
-                              : "#f0f0f0",
-                          alignItems: "center",
-                        }}
-                        onPress={() =>
-                          setFeedbackAnswer({
-                            ...feedbackAnswer,
-                            eventHappened: true,
-                          })
-                        }
-                      >
-                        <Text
-                          style={{
-                            color:
-                              feedbackAnswer.eventHappened === true
-                                ? "#fff"
-                                : "#666",
-                            fontWeight: "bold",
-                          }}
-                        >
-                          Yes
-                        </Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={{
-                          flex: 1,
-                          padding: 10,
-                          borderRadius: 12,
-                          backgroundColor:
-                            feedbackAnswer.eventHappened === false
-                              ? Colors.danger
-                              : "#f0f0f0",
-                          alignItems: "center",
-                        }}
-                        onPress={() =>
-                          setFeedbackAnswer({
-                            ...feedbackAnswer,
-                            eventHappened: false,
-                          })
-                        }
-                      >
-                        <Text
-                          style={{
-                            color:
-                              feedbackAnswer.eventHappened === false
-                                ? "#fff"
-                                : "#666",
-                            fontWeight: "bold",
-                          }}
-                        >
-                          No
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-
-                    {feedbackAnswer.eventHappened && (
-                      <>
-                        <Text
-                          style={{
-                            fontFamily: Typography.bodySemibold,
-                            marginBottom: 8,
-                          }}
-                        >
-                          How would you rate the experience?
-                        </Text>
-                        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-                          {["🌑", "🌒", "🌓", "🌔", "🌕"].map((moon, index) => {
-                            const ratingValue = index + 1;
-                            const isSelected = feedbackAnswer.rating === ratingValue;
-                            return (
-                              <TouchableOpacity
-                                key={ratingValue}
-                                style={{
-                                  padding: 10,
-                                  borderRadius: 24,
-                                  backgroundColor: isSelected ? Colors.primary : "#f0f0f0",
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                  width: 48,
-                                  height: 48
-                                }}
-                                onPress={() => setFeedbackAnswer({ ...feedbackAnswer, rating: ratingValue })}
-                              >
-                                <Text style={{ fontSize: 20 }}>{moon}</Text>
-                              </TouchableOpacity>
-                            );
-                          })}
-                        </View>
-                      </>
-                    )}
-
-                    <TouchableOpacity
-                      disabled={
-                        feedbackAnswer.eventHappened === undefined ||
-                        (feedbackAnswer.eventHappened &&
-                          feedbackAnswer.rating === undefined)
-                      }
-                      style={[
-                        styles.btnPrimaryFull,
-                        {
-                          opacity:
-                            feedbackAnswer.eventHappened !== undefined &&
-                            (!feedbackAnswer.eventHappened ||
-                              feedbackAnswer.rating !== undefined)
-                              ? 1
-                              : 0.5,
-                          marginTop: 0,
-                        },
-                      ]}
-                      onPress={async () => {
-                        await submitFeedback(
-                          selectedEvent.id,
-                          feedbackAnswer.eventHappened!,
-                          feedbackAnswer.rating || 0
-                        );
-                        setFeedbackSubmitted((prev) => ({
-                          ...prev,
-                          [selectedEvent.id]: true,
-                        }));
-                        alert("Feedback submitted. 1 leaf refunded!");
-                        setSelectedEvent(null);
-                        setMode("map");
-                      }}
-                    >
-                      <Text style={styles.btnPrimaryText}>
-                        Submit & Claim 1 🍃
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
-
-              {/* Normal Chat Input */}
-              {!isPastEvent && !isFinalized && (
-                <View style={styles.chatInputRow}>
-                  <TextInput
-                    style={styles.chatInput}
-                    placeholder="Send a scroll..."
-                    placeholderTextColor="#bbb"
-                  />
-                  <TouchableOpacity style={styles.btnPrimary}>
-                    <Text style={styles.btnPrimaryText}>Send</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-            </View>
-          )}
-        </BlurView>
-      </View>
-    );
-  };
+  ;
 
   const renderFilters = () => (
     <View style={styles.glassWrapperBottomFull}>
-      <BlurView intensity={90} tint="light" style={styles.glassPanelBottomFull}>
+      <BlurView intensity={90} tint="dark" style={styles.glassPanelBottomFull}>
         <View
           style={{
             flexDirection: "row",
@@ -2922,15 +1841,17 @@ export default function MapScreen() {
                     <TouchableOpacity
                       style={{
                         padding: 15,
-                        backgroundColor: "rgba(255,255,255,0.5)",
+                        backgroundColor: Colors.bgInput,
                         borderRadius: 16,
+                        borderWidth: 1,
+                        borderColor: Colors.hairline,
                       }}
                       onPress={() => setExpandedCat(isExpanded ? null : cat.id)}
                     >
                       <Feather
                         name={isExpanded ? "chevron-up" : "chevron-down"}
                         size={20}
-                        color={Colors.text}
+                        color={Colors.textSecondary}
                       />
                     </TouchableOpacity>
                   )}
@@ -3018,15 +1939,17 @@ export default function MapScreen() {
               <TouchableOpacity
                 style={{
                   padding: 15,
-                  backgroundColor: "rgba(255,255,255,0.5)",
+                  backgroundColor: Colors.bgInput,
                   borderRadius: 16,
+                  borderWidth: 1,
+                  borderColor: Colors.hairline,
                 }}
                 onPress={() => setExpandedAge(!expandedAge)}
               >
                 <Feather
                   name={expandedAge ? "chevron-up" : "chevron-down"}
                   size={20}
-                  color={Colors.text}
+                  color={Colors.textSecondary}
                 />
               </TouchableOpacity>
             </View>
@@ -3116,8 +2039,10 @@ export default function MapScreen() {
               <TouchableOpacity
                 style={{
                   padding: 15,
-                  backgroundColor: "rgba(255,255,255,0.5)",
+                  backgroundColor: Colors.bgInput,
                   borderRadius: 16,
+                  borderWidth: 1,
+                  borderColor: Colors.hairline,
                 }}
                 onPress={() => setExpandedGender(!expandedGender)}
               >
@@ -3181,505 +2106,7 @@ export default function MapScreen() {
     </View>
   );
 
-  const renderCreateTribeWizard = () => {
-    return (
-      <View style={styles.glassWrapperBottomFull}>
-        <BlurView
-          intensity={95}
-          tint="light"
-          style={styles.glassPanelBottomFull}
-        >
-          {wizardStep === 1 && (
-            <View style={{ flex: 1 }}>
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  marginBottom: 20,
-                }}
-              >
-                <Text
-                  style={{
-                    fontFamily: Typography.heading,
-                    fontSize: 24,
-                    color: Colors.text,
-                    flex: 1,
-                  }}
-                >
-                  Form a Tribe
-                </Text>
-                <TouchableOpacity onPress={() => setMode("map")}>
-                  <Feather name="x" size={24} color={Colors.text} />
-                </TouchableOpacity>
-              </View>
-              <Text
-                style={{
-                  fontFamily: Typography.body,
-                  color: Colors.textLight,
-                  marginBottom: 20,
-                  fontSize: 13,
-                  lineHeight: 18,
-                }}
-              >
-                You successfully hosted an event! Now you have the right to form
-                a permanent Tribe with the attendees.
-              </Text>
-
-              <Text
-                style={{
-                  fontFamily: Typography.bodyBold,
-                  fontSize: 13,
-                  color: Colors.text,
-                  marginBottom: 6,
-                }}
-              >
-                Tribe Name
-              </Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g. Weekend Warriors"
-                value={wizardDraft.name}
-                onChangeText={(t) =>
-                  setWizardDraft({ ...wizardDraft, name: t })
-                }
-              />
-
-              <Text
-                style={{
-                  fontFamily: Typography.bodyBold,
-                  fontSize: 13,
-                  color: Colors.text,
-                  marginBottom: 6,
-                }}
-              >
-                Description
-              </Text>
-              <TextInput
-                style={[styles.input, { height: 80 }]}
-                multiline
-                placeholder="What is this tribe about?"
-                value={wizardDraft.description}
-                onChangeText={(t) =>
-                  setWizardDraft({ ...wizardDraft, description: t })
-                }
-              />
-
-              <Text
-                style={{
-                  fontFamily: Typography.bodyBold,
-                  fontSize: 13,
-                  color: Colors.text,
-                  marginBottom: 6,
-                }}
-              >
-                Main Interest Category
-              </Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={{ marginBottom: 20 }}
-              >
-                {EVENT_CATEGORIES.map((cat) => (
-                  <TouchableOpacity
-                    key={cat.id}
-                    onPress={() =>
-                      setWizardDraft({ ...wizardDraft, categoryId: cat.id, categorySub: [] })
-                    }
-                    style={{
-                      paddingHorizontal: 16,
-                      paddingVertical: 8,
-                      borderRadius: 20,
-                      marginRight: 8,
-                      backgroundColor:
-                        wizardDraft.categoryId === cat.id
-                          ? cat.color
-                          : "rgba(255,255,255,0.7)",
-                      borderWidth: 1,
-                      borderColor:
-                        wizardDraft.categoryId === cat.id ? cat.color : "#ccc",
-                    }}
-                  >
-                    <Text
-                      style={{
-                        color:
-                          wizardDraft.categoryId === cat.id ? "#fff" : "#666",
-                        fontWeight: "bold",
-                        fontSize: 13,
-                      }}
-                    >
-                      {cat.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-              {wizardDraft.categoryId && (EVENT_CATEGORIES.find(c => c.id === wizardDraft.categoryId)?.subgroups || []).length > 0 && (
-                <>
-                  <Text style={{ fontFamily: Typography.bodyBold, fontSize: 13, color: Colors.text, marginBottom: 6 }}>
-                    Specific Interests (Optional)
-                  </Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 20 }}>
-                    {EVENT_CATEGORIES.find(c => c.id === wizardDraft.categoryId)?.subgroups.map(sub => (
-                      <TouchableOpacity
-                        key={sub}
-                        onPress={() => {
-                          const subs = wizardDraft.categorySub || [];
-                          if (subs.includes(sub)) {
-                              setWizardDraft({...wizardDraft, categorySub: subs.filter(s => s !== sub)});
-                          } else {
-                              setWizardDraft({...wizardDraft, categorySub: [...subs, sub]});
-                          }
-                        }}
-                        style={[
-                          styles.wizardSubCat,
-                          wizardDraft.categorySub?.includes(sub) && styles.wizardSubCatActive
-                        ]}
-                      >
-                        <Text style={wizardDraft.categorySub?.includes(sub) ? styles.wizardSubCatText : { fontFamily: Typography.bodySemibold, fontSize: 13, color: Colors.textLight } }>{sub}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </>
-              )}
-
-              <TouchableOpacity
-                disabled={!wizardDraft.name || !wizardDraft.categoryId}
-                style={[
-                  styles.btnPrimaryFull,
-                  {
-                    opacity:
-                      wizardDraft.name && wizardDraft.categoryId ? 1 : 0.5,
-                  },
-                ]}
-                onPress={() => setWizardStep(2)}
-              >
-                <Text style={styles.btnPrimaryText}>Next: Choose a Spirit</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {wizardStep === 2 && (
-            <View style={{ flex: 1 }}>
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  marginBottom: 20,
-                }}
-              >
-                <TouchableOpacity
-                  onPress={() => setWizardStep(1)}
-                  style={{ padding: 5, marginRight: 8 }}
-                >
-                  <Feather name="arrow-left" size={24} color={Colors.text} />
-                </TouchableOpacity>
-                <Text
-                  style={{
-                    fontFamily: Typography.heading,
-                    fontSize: 24,
-                    color: Colors.text,
-                    flex: 1,
-                  }}
-                >
-                  Choose a Spirit
-                </Text>
-              </View>
-              <Text
-                style={{
-                  fontFamily: Typography.body,
-                  color: Colors.textLight,
-                  marginBottom: 20,
-                  fontSize: 13,
-                  lineHeight: 18,
-                }}
-              >
-                The spirit acts as an emblem for your tribe. It will represent
-                your group on the map.
-              </Text>
-
-              <View
-                style={{
-                  flexDirection: "row",
-                  flexWrap: "wrap",
-                  gap: 12,
-                  justifyContent: "center",
-                  marginBottom: 20,
-                }}
-              >
-                {Object.keys(SPIRIT_ASSETS).map((key) => (
-                  <TouchableOpacity
-                    key={key}
-                    onPress={() =>
-                      setWizardDraft({ ...wizardDraft, spiritId: key })
-                    }
-                    style={{
-                      width: "30%",
-                      aspectRatio: 1,
-                      backgroundColor:
-                        wizardDraft.spiritId === key
-                          ? "rgba(140,179,105,0.2)"
-                          : "rgba(255,255,255,0.6)",
-                      borderRadius: 20,
-                      borderWidth: 2,
-                      borderColor:
-                        wizardDraft.spiritId === key
-                          ? Colors.primary
-                          : "transparent",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      padding: 10,
-                    }}
-                  >
-                    <Image
-                      source={SPIRIT_ASSETS[key]}
-                      style={{
-                        width: "80%",
-                        height: "80%",
-                        resizeMode: "contain",
-                        marginBottom: 4,
-                      }}
-                    />
-                    <Text
-                      style={{
-                        fontSize: 10,
-                        fontFamily: Typography.bodyBold,
-                        color: Colors.text,
-                      }}
-                    >
-                      {SPIRIT_LABELS[key]}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              <TouchableOpacity
-                style={styles.btnPrimaryFull}
-                onPress={() => setWizardStep(3)}
-              >
-                <Text style={styles.btnPrimaryText}>
-                  Next: Privacy & Review
-                </Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {wizardStep === 3 && (
-            <View style={{ flex: 1 }}>
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  marginBottom: 20,
-                }}
-              >
-                <TouchableOpacity
-                  onPress={() => setWizardStep(2)}
-                  style={{ padding: 5, marginRight: 8 }}
-                >
-                  <Feather name="arrow-left" size={24} color={Colors.text} />
-                </TouchableOpacity>
-                <Text
-                  style={{
-                    fontFamily: Typography.heading,
-                    fontSize: 24,
-                    color: Colors.text,
-                    flex: 1,
-                  }}
-                >
-                  Final Step
-                </Text>
-              </View>
-
-              <View
-                style={{
-                  backgroundColor: "rgba(255,255,255,0.7)",
-                  padding: 20,
-                  borderRadius: 20,
-                  marginBottom: 20,
-                }}
-              >
-                <Text
-                  style={{
-                    fontFamily: Typography.bodyBold,
-                    fontSize: 16,
-                    marginBottom: 10,
-                  }}
-                >
-                  Privacy Settings
-                </Text>
-                <TouchableOpacity
-                  onPress={() =>
-                    setWizardDraft({ ...wizardDraft, isPrivateTribe: false })
-                  }
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    marginBottom: 12,
-                    padding: 10,
-                    borderRadius: 12,
-                    backgroundColor: !wizardDraft.isPrivateTribe
-                      ? "rgba(140,179,105,0.1)"
-                      : "transparent",
-                    borderWidth: 1,
-                    borderColor: !wizardDraft.isPrivateTribe
-                      ? Colors.primary
-                      : "transparent",
-                  }}
-                >
-                  <View
-                    style={{
-                      width: 22,
-                      height: 22,
-                      borderRadius: 11,
-                      borderWidth: 2,
-                      borderColor: Colors.primary,
-                      marginRight: 10,
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    {!wizardDraft.isPrivateTribe && (
-                      <View
-                        style={{
-                          width: 12,
-                          height: 12,
-                          borderRadius: 6,
-                          backgroundColor: Colors.primary,
-                        }}
-                      />
-                    )}
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text
-                      style={{
-                        fontFamily: Typography.bodyBold,
-                        color: Colors.text,
-                      }}
-                    >
-                      Public Tribe
-                    </Text>
-                    <Text
-                      style={{
-                        fontFamily: Typography.body,
-                        fontSize: 12,
-                        color: Colors.textLight,
-                      }}
-                    >
-                      Anyone can see your events tagged with this tribe.
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() =>
-                    setWizardDraft({ ...wizardDraft, isPrivateTribe: true })
-                  }
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    padding: 10,
-                    borderRadius: 12,
-                    backgroundColor: wizardDraft.isPrivateTribe
-                      ? "rgba(140,179,105,0.1)"
-                      : "transparent",
-                    borderWidth: 1,
-                    borderColor: wizardDraft.isPrivateTribe
-                      ? Colors.primary
-                      : "transparent",
-                  }}
-                >
-                  <View
-                    style={{
-                      width: 22,
-                      height: 22,
-                      borderRadius: 11,
-                      borderWidth: 2,
-                      borderColor: Colors.primary,
-                      marginRight: 10,
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    {wizardDraft.isPrivateTribe && (
-                      <View
-                        style={{
-                          width: 12,
-                          height: 12,
-                          borderRadius: 6,
-                          backgroundColor: Colors.primary,
-                        }}
-                      />
-                    )}
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text
-                      style={{
-                        fontFamily: Typography.bodyBold,
-                        color: Colors.text,
-                      }}
-                    >
-                      Private Tribe
-                    </Text>
-                    <Text
-                      style={{
-                        fontFamily: Typography.body,
-                        fontSize: 12,
-                        color: Colors.textLight,
-                      }}
-                    >
-                      Your tribe name and badge will be hidden from public
-                      events. Invitation only.
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              </View>
-
-              <View style={{ alignItems: "center", marginBottom: 20 }}>
-                <Text
-                  style={{
-                    fontFamily: Typography.body,
-                    color: Colors.textLight,
-                    textAlign: "center",
-                  }}
-                >
-                  By planting this seed, you invite the attendees of your last
-                  event to join your new tribe immediately.
-                </Text>
-              </View>
-
-              <TouchableOpacity
-                style={styles.btnPrimaryFull}
-                onPress={async () => {
-                  await createTribe(
-                    wizardDraft.name,
-                    wizardDraft.description,
-                    wizardDraft.categoryId,
-                    wizardDraft.spiritId,
-                    wizardDraft.isPrivateTribe,
-                    wizardDraft.fromAttendees,
-                    wizardDraft.categorySub
-                  );
-                  alert("Tribe has been planted! Welcome, Chief.");
-                  setMode("map");
-                  setWizardStep(0);
-                  setWizardDraft({
-                    name: "",
-                    description: "",
-                    spiritId: "forest",
-                    isPrivateTribe: false,
-                    categoryId: "",
-                    categorySub: [],
-                    fromEventId: "",
-                    fromAttendees: [],
-                  });
-                }}
-              >
-                <Text style={styles.btnPrimaryText}>Plant the Seed 🔥</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-        </BlurView>
-      </View>
-    );
-  };
+  ;
 
   const renderTutorial = () => {
     switch (tutStep) {
@@ -3741,26 +2168,29 @@ export default function MapScreen() {
                 position: "absolute",
                 top: 100,
                 left: 20,
-                backgroundColor: "#fff",
+                backgroundColor: Colors.bg,
                 padding: 20,
                 borderRadius: 20,
                 width: 260,
                 shadowColor: "#000",
-                shadowOpacity: 0.1,
+                shadowOpacity: 0.35,
                 shadowRadius: 20,
                 elevation: 15,
+                borderWidth: 1,
+                borderColor: Colors.hairline,
               }}
               pointerEvents="auto"
             >
               <Feather
                 name="arrow-up"
                 size={30}
-                color={Colors.primary}
+                color={Colors.gold}
                 style={{ position: "absolute", top: -25, left: 25 }}
               />
               <Text
                 style={{
                   fontFamily: Typography.bodySemibold,
+                  color: Colors.textPrimary,
                   marginBottom: 10,
                 }}
               >
@@ -3769,7 +2199,7 @@ export default function MapScreen() {
               <Text
                 style={{
                   fontFamily: Typography.body,
-                  color: "#666",
+                  color: Colors.textSecondary,
                   marginBottom: 15,
                 }}
               >
@@ -3801,26 +2231,29 @@ export default function MapScreen() {
                 position: "absolute",
                 top: 105,
                 right: 20,
-                backgroundColor: "#fff",
+                backgroundColor: Colors.bg,
                 padding: 20,
                 borderRadius: 20,
                 width: 260,
                 shadowColor: "#000",
-                shadowOpacity: 0.1,
+                shadowOpacity: 0.35,
                 shadowRadius: 20,
                 elevation: 15,
+                borderWidth: 1,
+                borderColor: Colors.hairline,
               }}
               pointerEvents="auto"
             >
               <Feather
                 name="arrow-up"
                 size={30}
-                color={Colors.primary}
+                color={Colors.gold}
                 style={{ position: "absolute", top: -25, right: 5 }}
               />
               <Text
                 style={{
                   fontFamily: Typography.bodySemibold,
+                  color: Colors.textPrimary,
                   marginBottom: 10,
                 }}
               >
@@ -3829,7 +2262,7 @@ export default function MapScreen() {
               <Text
                 style={{
                   fontFamily: Typography.body,
-                  color: "#666",
+                  color: Colors.textSecondary,
                   marginBottom: 15,
                 }}
               >
@@ -3861,26 +2294,29 @@ export default function MapScreen() {
                 position: "absolute",
                 top: 165,
                 right: 20,
-                backgroundColor: "#fff",
+                backgroundColor: Colors.bg,
                 padding: 20,
                 borderRadius: 20,
                 width: 260,
                 shadowColor: "#000",
-                shadowOpacity: 0.1,
+                shadowOpacity: 0.35,
                 shadowRadius: 20,
                 elevation: 15,
+                borderWidth: 1,
+                borderColor: Colors.hairline,
               }}
               pointerEvents="auto"
             >
               <Feather
                 name="arrow-up"
                 size={30}
-                color={Colors.primary}
+                color={Colors.gold}
                 style={{ position: "absolute", top: -25, right: 5 }}
               />
               <Text
                 style={{
                   fontFamily: Typography.bodySemibold,
+                  color: Colors.textPrimary,
                   marginBottom: 10,
                 }}
               >
@@ -3889,7 +2325,7 @@ export default function MapScreen() {
               <Text
                 style={{
                   fontFamily: Typography.body,
-                  color: "#666",
+                  color: Colors.textSecondary,
                   marginBottom: 15,
                 }}
               >
@@ -3921,26 +2357,29 @@ export default function MapScreen() {
                 position: "absolute",
                 bottom: 110,
                 right: 20,
-                backgroundColor: "#fff",
+                backgroundColor: Colors.bg,
                 padding: 20,
                 borderRadius: 20,
                 width: 260,
                 shadowColor: "#000",
-                shadowOpacity: 0.1,
+                shadowOpacity: 0.35,
                 shadowRadius: 20,
                 elevation: 15,
+                borderWidth: 1,
+                borderColor: Colors.hairline,
               }}
               pointerEvents="auto"
             >
               <Feather
                 name="arrow-down"
                 size={30}
-                color={Colors.primary}
+                color={Colors.gold}
                 style={{ position: "absolute", bottom: -25, right: 10 }}
               />
               <Text
                 style={{
                   fontFamily: Typography.bodySemibold,
+                  color: Colors.textPrimary,
                   marginBottom: 10,
                 }}
               >
@@ -3949,7 +2388,7 @@ export default function MapScreen() {
               <Text
                 style={{
                   fontFamily: Typography.body,
-                  color: "#666",
+                  color: Colors.textSecondary,
                   marginBottom: 15,
                 }}
               >
@@ -3975,25 +2414,27 @@ export default function MapScreen() {
               position: "absolute",
               top: 180,
               left: 20,
-              backgroundColor: "#fff",
+              backgroundColor: Colors.bg,
               padding: 20,
               borderRadius: 20,
               width: 260,
               shadowColor: "#000",
-              shadowOpacity: 0.1,
+              shadowOpacity: 0.35,
               shadowRadius: 20,
               elevation: 15,
+              borderWidth: 1,
+              borderColor: Colors.hairline,
               zIndex: 9999,
             }}
           >
             <Feather
               name="arrow-up"
               size={30}
-              color={Colors.primary}
+              color={Colors.gold}
               style={{ position: "absolute", top: -25, left: 14 }}
             />
             <Text
-              style={{ fontFamily: Typography.bodySemibold, marginBottom: 10 }}
+              style={{ fontFamily: Typography.bodySemibold, color: Colors.textPrimary, marginBottom: 10 }}
             >
               5. Create an Event
             </Text>
@@ -4026,26 +2467,28 @@ export default function MapScreen() {
               top: 100,
               left: "50%",
               transform: [{ translateX: -150 }],
-              backgroundColor: "#fff",
+              backgroundColor: Colors.bg,
               padding: 20,
               borderRadius: 20,
               width: 300,
               shadowColor: "#000",
-              shadowOpacity: 0.1,
+              shadowOpacity: 0.35,
               shadowRadius: 20,
               elevation: 15,
+              borderWidth: 1,
+              borderColor: Colors.hairline,
               zIndex: 9999,
             }}
           >
             <Text
-              style={{ fontFamily: Typography.bodySemibold, marginBottom: 10 }}
+              style={{ fontFamily: Typography.bodySemibold, color: Colors.textPrimary, marginBottom: 10 }}
             >
               6. Tribal Fires
             </Text>
             <Text
               style={{
                 fontFamily: Typography.body,
-                color: "#666",
+                color: Colors.textSecondary,
                 marginBottom: 10,
               }}
             >
@@ -4072,7 +2515,7 @@ export default function MapScreen() {
             <Feather
               name="arrow-down"
               size={30}
-              color={Colors.primary}
+              color={Colors.gold}
               style={{ alignSelf: "center", position: "absolute", bottom: -30 }}
             />
           </View>
@@ -4085,20 +2528,22 @@ export default function MapScreen() {
               top: 120,
               left: "50%",
               transform: [{ translateX: -150 }],
-              backgroundColor: "#fff",
+              backgroundColor: Colors.bg,
               padding: 20,
               borderRadius: 20,
               width: 300,
               shadowColor: "#000",
-              shadowOpacity: 0.1,
+              shadowOpacity: 0.35,
               shadowRadius: 20,
               elevation: 15,
+              borderWidth: 1,
+              borderColor: Colors.hairline,
               zIndex: 9999,
             }}
             pointerEvents="none"
           >
             <Text
-              style={{ fontFamily: Typography.bodySemibold, marginBottom: 10 }}
+              style={{ fontFamily: Typography.bodySemibold, color: Colors.textPrimary, marginBottom: 10 }}
             >
               7. Joining a Tribe
             </Text>
@@ -4116,7 +2561,7 @@ export default function MapScreen() {
             <Feather
               name="arrow-down"
               size={30}
-              color={Colors.primary}
+              color={Colors.gold}
               style={{ alignSelf: "center", marginTop: 10 }}
             />
           </View>
@@ -4153,56 +2598,15 @@ export default function MapScreen() {
     };
   };
 
-  const renderProfileModal = () => {
-    if (!profileViewUid) return null;
-    return (
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "center", alignItems: "center", zIndex: 9999 }]}>
-        <BlurView intensity={90} tint="light" style={{ width: 320, padding: 24, borderRadius: 24, backgroundColor: "rgba(255,255,255,0.7)", alignItems: "center" }}>
-          <TouchableOpacity style={{ position: "absolute", top: 15, right: 15, zIndex: 10000 }} onPress={() => { setProfileViewUid(null); setProfileViewData(null); }}>
-            <Feather name="x" size={24} color={Colors.text} />
-          </TouchableOpacity>
-          {profileViewData ? (
-            <>
-              <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: Colors.primary, justifyContent: "center", alignItems: "center", marginBottom: 16 }}>
-                <Text style={{ fontSize: 32, fontFamily: Typography.heading, color: "#fff" }}>{String(profileViewData.displayName || "?").charAt(0).toUpperCase()}</Text>
-              </View>
-              <Text style={{ fontFamily: Typography.heading, fontSize: 22, color: Colors.text, marginBottom: 16 }}>{String(profileViewData.displayName || "Unknown")}</Text>
-              <View style={{ flexDirection: "row", gap: 8, marginBottom: 16, flexWrap: "wrap", justifyContent: "center" }}>
-                {profileViewData.dateOfBirth && !isNaN(new Date(String(profileViewData.dateOfBirth)).getTime()) ? (
-                  <View style={{ backgroundColor: "rgba(255,255,255,0.6)", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, borderWidth: 1, borderColor: "#ddd" }}>
-                    <Text style={{ fontFamily: Typography.bodyBold, fontSize: 12, color: Colors.text }}>⏳ {Math.floor((Date.now() - new Date(String(profileViewData.dateOfBirth)).getTime()) / 31557600000)}</Text>
-                  </View>
-                ) : null}
-                {profileViewData.sex ? (
-                  <View style={{ backgroundColor: "rgba(255,255,255,0.6)", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, borderWidth: 1, borderColor: "#ddd" }}>
-                    <Text style={{ fontFamily: Typography.bodyBold, fontSize: 12, color: Colors.text }}>{profileViewData.sex === "Male" ? "‍♂️" : profileViewData.sex === "Female" ? "‍♀️" : "👤"} {String(profileViewData.sex)}</Text>
-                  </View>
-                ) : null}
-              </View>
-              {profileViewData.description ? (
-                <Text style={{ fontFamily: Typography.body, fontSize: 14, color: Colors.text, textAlign: "center", marginBottom: 20 }}>
-                  "{String(profileViewData.description)}"
-                </Text>
-              ) : null}
-              <View style={{ flexDirection: "row", gap: 20, borderTopWidth: 1, borderTopColor: "rgba(0,0,0,0.05)", paddingTop: 16, width: "100%", justifyContent: "center", alignItems: "center" }}>
-                <View style={{ alignItems: "center" }}>
-                  <Text style={{ fontSize: 13, fontFamily: Typography.bodySemibold, color: Colors.text }}>Host Rating</Text>
-                  <Text style={{ fontSize: 20, marginTop: 4 }}>
-                    {renderMoons(profileViewData.ratingSum || 0, profileViewData.ratingCount || 0)}
-                  </Text>
-                </View>
-              </View>
-            </>
-          ) : (
-            <ActivityIndicator color={Colors.primary} size="large" style={{ marginVertical: 40 }} />
-          )}
-        </BlurView>
-      </View>
-    );
-  };
+  ;
 
   return (
     <View style={styles.container}>
+      {/* Monochromatic parchment wash — the CSS filter desaturates map hues and
+          applies a warm sepia tone so the entire canvas reads as a single pale sage */}
+      <div style={{ position: 'absolute', inset: 0, zIndex: 0 }}>
+      {/* Hide Mapbox branding from canvas — attribution is in Settings per ToS */}
+      <style>{`.mapboxgl-ctrl-logo,.mapboxgl-ctrl-attrib{display:none!important}`}</style>
       <Map
         ref={mapRef}
         initialViewState={{
@@ -4211,8 +2615,9 @@ export default function MapScreen() {
           zoom: 12.5,
         }}
         style={{ width: "100%", height: "100%" }}
-        mapStyle="mapbox://styles/mapbox/light-v11"
-        mapboxAccessToken={process.env.EXPO_PUBLIC_MAPBOX_KEY}
+        mapStyle="mapbox://styles/tribes024/cmnr95i12000x01sc6y2845lo"
+        mapboxAccessToken={MAPBOX_TOKEN}
+        attributionControl={false}
         onClick={handleMapClick}
         onZoom={(e: any) => setCurrentZoom(e.viewState.zoom)}
       >
@@ -4384,25 +2789,26 @@ export default function MapScreen() {
           </Marker>
         )}
       </Map>
+      </div>
 
       {renderHUD()}
       {renderDevTools()}
       {mode === "wizard_details" && renderWizardDetails()}
       {mode === "wizard_location" && renderWizardLocation()}
-      {mode === "event_chat" && renderEventChat()}
+      {mode === "event_chat" && <EventChat selectedEvent={selectedEvent} setSelectedEvent={setSelectedEvent} setMode={setMode} user={user} events={events} joinEvent={joinEvent} deleteEvent={deleteEvent} finalizeEvent={finalizeEvent} finalizeChecked={finalizeChecked} setFinalizeChecked={setFinalizeChecked} submitFeedback={submitFeedback} feedbackAnswer={feedbackAnswer} setFeedbackAnswer={setFeedbackAnswer} feedbackSubmitted={feedbackSubmitted} setFeedbackSubmitted={setFeedbackSubmitted} getUserFeedback={getUserFeedback} userFeedbackCache={userFeedbackCache} setUserFeedbackCache={setUserFeedbackCache} creatorStatsCache={creatorStatsCache} setCreatorStatsCache={setCreatorStatsCache} participantNamesCache={participantNamesCache} setParticipantNamesCache={setParticipantNamesCache} getParticipantNames={undefined} tribes={tribes} setProfileViewUid={setProfileViewUid} setSelectedTribe={setSelectedTribe} handleJoin={handleJoin} setFormTribeChecked={setFormTribeChecked} formTribeChecked={formTribeChecked} setWizardDraft={setWizardDraft} setWizardStep={setWizardStep} />}
       {mode === "filters" && renderFilters()}
-      {mode === "tribe_panel" && renderTribePanel()}
-      {mode === "create_tribe_wizard" && renderCreateTribeWizard()}
+      {mode === "tribe_panel" && <TribePanel selectedTribe={selectedTribe} setSelectedTribe={setSelectedTribe} user={user} applyToTribe={applyToTribe} leaveTribe={leaveTribe} showManagement={showManagement} setShowManagement={setShowManagement} announcementText={announcementText} setAnnouncementText={setAnnouncementText} postAnnouncement={postAnnouncement} acceptApplicant={acceptApplicant} rejectApplicant={rejectApplicant} removeMember={removeMember} deleteTribe={deleteTribe} updateTribe={updateTribe} promoteMember={promoteMember} demoteMember={demoteMember} events={events} setMode={setMode} setSelectedEvent={setSelectedEvent} setDraft={setDraft} draft={draft} setProfileViewUid={setProfileViewUid} renderManagementOverlay={renderManagementOverlay} />}
+      {mode === "create_tribe_wizard" && <CreateTribeWizard wizardDraft={wizardDraft} setWizardDraft={setWizardDraft} wizardStep={wizardStep} setWizardStep={setWizardStep} createTribe={createTribe} setMode={setMode} user={user} formTribeChecked={formTribeChecked} setFormTribeChecked={setFormTribeChecked} />}
       {renderMapSearch()}
       {renderTutorial()}
-      {renderProfileModal()}
+      {<ProfileModal profileViewData={profileViewData} profileViewUid={profileViewUid} setProfileViewUid={setProfileViewUid} setProfileViewData={setProfileViewData} />}
     </View>
   );
 }
 
 // ---------------- STYLES ---------------- //
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+  container: { flex: 1, backgroundColor: Colors.bg },
   settingsBtn: { position: "absolute", top: 35, right: 20 },
   locateBtn: { position: "absolute", top: 95, right: 20 },
   iconWrapper: {
@@ -4410,9 +2816,9 @@ const styles = StyleSheet.create({
     borderRadius: 25,
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.4)",
+    borderColor: Colors.hairline,
     shadowColor: "#000",
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.2,
     shadowRadius: 10,
   },
   inlineIcon: {
@@ -4446,7 +2852,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   devBtn: {
-    backgroundColor: "#fff",
+    backgroundColor: Colors.bgElevated,
     paddingHorizontal: 6,
     paddingVertical: 6,
     borderRadius: 8,
@@ -4467,13 +2873,13 @@ const styles = StyleSheet.create({
     height: 54,
     borderRadius: 27,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.4)",
+    borderColor: Colors.hairline,
     justifyContent: "center",
     alignItems: "center",
   },
   balanceText: {
     fontFamily: Typography.bodyBold,
-    color: Colors.primaryDark,
+    color: Colors.textPrimary,
     fontSize: 13,
     textAlign: "center",
   },
@@ -4482,34 +2888,34 @@ const styles = StyleSheet.create({
   plusBtn: {
     width: 54,
     height: 54,
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.glassBtnBg,
     borderRadius: 27,
     justifyContent: "center",
     alignItems: "center",
-    shadowColor: Colors.primaryDark,
-    shadowOpacity: 0.4,
+    shadowColor: Colors.gold,
+    shadowOpacity: 0.55,
     shadowRadius: 10,
-    shadowOffset: { width: 0, height: 5 },
+    shadowOffset: { width: 0, height: 0 },
     elevation: 6,
   },
   upcomingScroll: { marginLeft: 12, maxWidth: 220 },
   upcomingIcon: {
     width: 40,
     height: 40,
-    backgroundColor: "rgba(255,255,255,0.85)",
+    backgroundColor: Colors.glassBtnBg,
     borderRadius: 20,
     justifyContent: "center",
     alignItems: "center",
     marginRight: 10,
-    borderWidth: 1,
-    borderColor: "#eee",
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 5,
+    shadowColor: Colors.gold,
+    shadowOpacity: 0.45,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 5,
   },
   upcomingInitial: {
     fontFamily: Typography.bodyBold,
-    color: Colors.text,
+    color: Colors.textPrimary,
     fontSize: 15,
   },
 
@@ -4528,33 +2934,21 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.5)",
+    borderColor: Colors.hairline,
     flexDirection: "row",
     alignItems: "center",
   },
   scrollIndicatorLeft: {
     position: "absolute",
-    left: 4,
+    left: 0,
     zIndex: 10,
-    backgroundColor: "rgba(255,255,255,0.9)",
-    padding: 4,
-    borderRadius: 12,
-    shadowColor: "#000",
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
+    padding: 8,
   },
   scrollIndicatorRight: {
     position: "absolute",
-    right: 4,
+    right: 0,
     zIndex: 10,
-    backgroundColor: "rgba(255,255,255,0.9)",
-    padding: 4,
-    borderRadius: 12,
-    shadowColor: "#000",
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
+    padding: 8,
   },
   datePill: {
     backgroundColor: "transparent",
@@ -4564,28 +2958,25 @@ const styles = StyleSheet.create({
     marginRight: 6,
   },
   datePillActive: {
-    backgroundColor: "rgba(255,255,255,0.95)",
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 5,
+    backgroundColor: Colors.gold,
   },
   datePillText: {
     fontFamily: Typography.bodySemibold,
-    color: Colors.textLight,
+    color: Colors.textSecondary,
     fontSize: 13,
   },
-  datePillTextActive: { color: Colors.text },
+  datePillTextActive: { color: '#1A2421' },
 
   filterBtn: { borderRadius: 24, overflow: "hidden" },
   filterBtnWrapper: {
     paddingHorizontal: 18,
     paddingVertical: 14,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.5)",
+    borderColor: Colors.hairline,
   },
   filterBtnText: {
-    fontFamily: Typography.bodyBold,
-    color: Colors.text,
+    fontFamily: Typography.bodySemibold,
+    color: Colors.textSecondary,
     fontSize: 13,
   },
 
@@ -4596,33 +2987,33 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: "#ddd",
+    borderColor: Colors.hairline,
     marginRight: 8,
-    backgroundColor: "#fff",
+    backgroundColor: Colors.bgInput,
   },
   wizardCatText: {
     fontFamily: Typography.bodyBold,
     fontSize: 13,
-    color: Colors.text,
+    color: Colors.textPrimary,
     marginLeft: 6,
   },
   wizardSubCat: {
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: "rgba(255,255,255,0.5)",
+    backgroundColor: Colors.bgInput,
+    borderWidth: 1,
+    borderColor: Colors.hairline,
     marginRight: 8,
   },
   wizardSubCatActive: {
-    backgroundColor: "rgba(255,255,255,0.95)",
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 5,
+    backgroundColor: Colors.goldDim,
+    borderColor: Colors.goldBorder,
   },
   wizardSubCatText: {
     fontFamily: Typography.bodySemibold,
     fontSize: 13,
-    color: Colors.primaryDark,
+    color: Colors.textSecondary,
   },
 
   filterGrid: {
@@ -4638,20 +3029,19 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#eee",
-    backgroundColor: "rgba(255,255,255,0.8)",
+    borderColor: Colors.hairline,
+    backgroundColor: Colors.bgInput,
     width: "48%",
   },
   filterCardActive: {
-    shadowColor: "#000",
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 5,
+    borderColor: Colors.goldBorder,
+    backgroundColor: Colors.goldDim,
   },
   filterCardText: {
     fontFamily: Typography.bodyBold,
     fontSize: 14,
     marginLeft: 8,
+    color: Colors.textPrimary,
   },
 
   glassWrapperBottom: {
@@ -4659,10 +3049,10 @@ const styles = StyleSheet.create({
     bottom: 35,
     left: 20,
     right: 20,
-    borderRadius: 30,
+    borderRadius: 24,
     overflow: "hidden",
     shadowColor: "#000",
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.3,
     shadowRadius: 25,
   },
   glassWrapperBottomFull: {
@@ -4671,11 +3061,11 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: "60%",
-    borderTopLeftRadius: 36,
-    borderTopRightRadius: 36,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     overflow: "hidden",
     shadowColor: "#000",
-    shadowOpacity: 0.15,
+    shadowOpacity: 0.3,
     shadowRadius: 30,
     zIndex: 100,
     elevation: 100,
@@ -4688,7 +3078,7 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     overflow: "hidden",
     shadowColor: "#000",
-    shadowOpacity: 0.2,
+    shadowOpacity: 0.3,
     shadowRadius: 20,
     zIndex: 100,
     elevation: 100,
@@ -4696,49 +3086,53 @@ const styles = StyleSheet.create({
 
   glassPanelBottom: {
     padding: 25,
-    backgroundColor: "rgba(255, 255, 255, 0.5)",
+    backgroundColor: Colors.bg,
+    borderWidth: 1,
+    borderColor: Colors.hairline,
   },
   glassPanelBottomFull: {
     padding: 30,
-    backgroundColor: "rgba(255, 255, 255, 0.6)",
+    backgroundColor: Colors.bg,
+    borderWidth: 1,
+    borderColor: Colors.hairline,
     flex: 1,
   },
-  glassPanelTop: { padding: 25, backgroundColor: "rgba(44, 58, 41, 0.7)" },
+  glassPanelTop: { padding: 25, backgroundColor: Colors.bg },
 
   panelTitle: {
-    fontFamily: Typography.heading,
-    fontSize: 26,
-    color: Colors.text,
+    fontFamily: Typography.headline,
+    fontSize: 24,
+    color: Colors.textPrimary,
     marginBottom: 20,
   },
   panelTitleDark: {
-    fontFamily: Typography.heading,
+    fontFamily: Typography.headline,
     fontSize: 22,
-    color: "#fff",
+    color: Colors.textPrimary,
     marginBottom: 5,
   },
   panelSubDark: {
     fontFamily: Typography.body,
     fontSize: 14,
-    color: "rgba(255,255,255,0.8)",
+    color: Colors.textSecondary,
     marginBottom: 20,
   },
   input: {
     fontFamily: Typography.body,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.8)",
-    backgroundColor: "rgba(255,255,255,0.8)",
+    borderColor: Colors.borderInput,
+    backgroundColor: Colors.bgInput,
     borderRadius: 16,
     padding: 16,
     marginBottom: 15,
     fontSize: 15,
-    color: Colors.text,
+    color: Colors.textPrimary,
   },
   suggestionsContainer: {
-    backgroundColor: "#fff",
+    backgroundColor: Colors.bgElevated,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#eee",
+    borderColor: Colors.hairline,
     maxHeight: 120,
     overflow: "hidden",
     marginTop: -5,
@@ -4747,47 +3141,61 @@ const styles = StyleSheet.create({
   suggestionItem: {
     padding: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#f5f5f5",
+    borderBottomColor: Colors.hairline,
   },
   suggestionText: {
     fontFamily: Typography.body,
     fontSize: 13,
-    color: Colors.text,
+    color: Colors.textPrimary,
   },
 
   row: { flexDirection: "row", gap: 10, justifyContent: "flex-end" },
   btnPrimary: {
-    backgroundColor: Colors.primary,
-    paddingHorizontal: 22,
-    paddingVertical: 14,
-    borderRadius: 16,
+    backgroundColor: Colors.glassBtnBg,
+    paddingHorizontal: 24,
+    height: 56,
+    borderRadius: 9999,
+    borderWidth: 1,
+    borderColor: Colors.gold,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 6,
   },
   btnPrimaryFull: {
-    backgroundColor: Colors.primary,
-    paddingVertical: 18,
-    borderRadius: 16,
+    backgroundColor: Colors.glassBtnBg,
+    height: 56,
+    borderRadius: 9999,
     alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 6,
     width: "100%",
     marginTop: 20,
+    borderWidth: 1,
+    borderColor: Colors.gold,
   },
   btnPrimaryText: {
     fontFamily: Typography.bodyBold,
-    color: "#fff",
+    color: Colors.textPrimary,
     fontSize: 15,
+    letterSpacing: 0.2,
   },
   btnSecondary: {
     backgroundColor: "transparent",
     paddingHorizontal: 15,
-    paddingVertical: 14,
+    height: 56,
+    justifyContent: "center",
+    alignItems: "center",
   },
   btnSecondaryText: {
     fontFamily: Typography.bodyBold,
-    color: "#999",
+    color: Colors.textSecondary,
     fontSize: 15,
   },
   btnSecondaryTextDark: {
     fontFamily: Typography.bodyBold,
-    color: "rgba(255,255,255,0.7)",
+    color: Colors.textSecondary,
     fontSize: 15,
   },
 
@@ -4798,24 +3206,24 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   chatTitle: {
-    fontFamily: Typography.heading,
+    fontFamily: Typography.headline,
     fontSize: 22,
-    color: Colors.text,
+    color: Colors.textPrimary,
   },
   chatSub: {
     fontFamily: Typography.body,
     fontSize: 12,
-    color: Colors.primary,
+    color: Colors.gold,
     marginTop: 4,
   },
-  closeIcon: { fontSize: 20, color: "#aaa", paddingHorizontal: 5 },
+  closeIcon: { fontSize: 20, color: Colors.textSecondary, paddingHorizontal: 5 },
   chatLoc: {
-    fontFamily: Typography.bodySemibold,
+    fontFamily: Typography.body,
     fontSize: 13,
     color: Colors.textLight,
     paddingBottom: 15,
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(0,0,0,0.05)",
+    borderBottomColor: Colors.hairline,
     marginBottom: 15,
   },
 
@@ -4827,16 +3235,16 @@ const styles = StyleSheet.create({
   },
   chatLockedIco: { fontSize: 45, marginBottom: 15 },
   chatLockedTitle: {
-    fontFamily: Typography.heading,
+    fontFamily: Typography.headline,
     fontSize: 24,
-    color: Colors.text,
+    color: Colors.textPrimary,
     marginBottom: 10,
     textAlign: "center",
   },
   chatLockedSub: {
     fontFamily: Typography.body,
     fontSize: 15,
-    color: Colors.textLight,
+    color: Colors.textSecondary,
     textAlign: "center",
     lineHeight: 22,
   },
@@ -4844,65 +3252,68 @@ const styles = StyleSheet.create({
   chatOpen: { flex: 1 },
   chatScroll: { flex: 1 },
   chatBubble: {
-    backgroundColor: "#F3F4F2",
+    backgroundColor: "rgba(255,255,255,0.06)",
     padding: 18,
     borderRadius: 20,
     alignSelf: "flex-start",
     borderBottomLeftRadius: 5,
+    borderWidth: 1,
+    borderColor: Colors.hairline,
   },
-  chatText: { fontFamily: Typography.body, color: Colors.text, fontSize: 14 },
+  chatText: { fontFamily: Typography.body, color: Colors.textPrimary, fontSize: 14 },
   chatInputRow: {
     flexDirection: "row",
     gap: 10,
     paddingTop: 15,
     borderTopWidth: 1,
-    borderTopColor: "rgba(0,0,0,0.05)",
+    borderTopColor: Colors.hairline,
   },
   chatInput: {
     flex: 1,
     fontFamily: Typography.body,
-    backgroundColor: "rgba(255,255,255,0.8)",
+    backgroundColor: Colors.bgInput,
     borderRadius: 20,
     paddingHorizontal: 20,
     borderWidth: 1,
-    borderColor: "#eee",
+    borderColor: Colors.borderInput,
+    color: Colors.textPrimary,
   },
 
   pinBase: {
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.sage,
     borderWidth: 2,
-    borderColor: "#fff",
+    borderColor: 'rgba(255,255,255,0.6)',
     justifyContent: "center",
     alignItems: "center",
     shadowColor: "#000",
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.35,
     shadowRadius: 5,
   },
   pinPublic: {
     width: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: Colors.accent,
+    backgroundColor: Colors.gold,
   },
   pinPrivate: {
     width: 90,
     height: 90,
     borderRadius: 45,
-    backgroundColor: "rgba(94, 113, 83, 0.25)",
+    backgroundColor: "rgba(107, 142, 107, 0.2)",
     borderWidth: 1,
-    borderColor: Colors.primary,
+    borderColor: Colors.sage,
   },
   pinDraft: {
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.gold,
     elevation: 10,
     borderWidth: 3,
-    borderColor: "#fff",
+    borderColor: 'rgba(255,255,255,0.5)',
   },
-  pinExternal: { backgroundColor: "#8B9C82" },
+  pinExternal: { backgroundColor: Colors.sage },
 });

@@ -283,9 +283,13 @@ export default function MapScreen() {
     if (!e.participants?.includes(user?.uid || "")) return false;
     if (e.status === "cancelled") return false;
     if (e.status === "finalized") {
+      // Finalized events stay in the bar only while the participant still
+      // has a leaf to claim; once feedback exists they disappear for good.
       const isHost = e.creatorId === user?.uid;
       if (isHost) return false;
       if (feedbackSubmitted[e.id]) return false;
+      const persisted = userFeedbackCache[e.id];
+      if (persisted && persisted !== "none") return false;
       return true;
     }
     return true;
@@ -301,6 +305,18 @@ export default function MapScreen() {
   const liveSelectedTribe = selectedTribe
     ? tribes.find((t) => t.id === selectedTribe.id) ?? selectedTribe
     : null;
+
+  const hasNarrowingFilters =
+    dateFilter !== "All" ||
+    Object.keys(activeFilters).length > 0 ||
+    activeAgeFilters.length > 0 ||
+    activeGenderFilters.length > 0;
+  const clearAllFilters = () => {
+    setDateFilter("All");
+    setActiveFilters({});
+    setActiveAgeFilters([]);
+    setActiveGenderFilters([]);
+  };
 
   // Load creator stats + feedback when event chat opens
   React.useEffect(() => {
@@ -335,6 +351,28 @@ export default function MapScreen() {
       }
     }
   }, [events, hasProcessedEventInvite]);
+
+  // Prefetch persisted feedback for finalized events the user joined, so the
+  // upcoming-events bar can hide the ones that were already rated — the
+  // in-session feedbackSubmitted flag alone is lost on every app restart.
+  React.useEffect(() => {
+    if (!user) return;
+    events
+      .filter(
+        (e) =>
+          e.status === "finalized" &&
+          e.creatorId !== user.uid &&
+          e.participants?.includes(user.uid) &&
+          userFeedbackCache[e.id] === undefined,
+      )
+      .forEach((e) => {
+        getUserFeedback(e.id)
+          .then((fb) => {
+            setUserFeedbackCache((prev) => ({ ...prev, [e.id]: fb || "none" }));
+          })
+          .catch(() => {});
+      });
+  }, [events, user?.uid]);
 
   React.useEffect(() => {
     if (!profileViewUid) {
@@ -493,7 +531,7 @@ export default function MapScreen() {
         {
           latitude: draft.location.lat,
           longitude: draft.location.lng,
-          address: draft.address || "Pinned carefully on Map",
+          address: draft.address || "Pinned on the map",
         },
         draft.date,
         draft.ageGroup,
@@ -1166,20 +1204,40 @@ export default function MapScreen() {
                 showsHorizontalScrollIndicator={false}
                 style={styles.upcomingScroll}
               >
-                {joinedEvents.map((e) => (
-                  <TouchableOpacity
-                    key={e.id}
-                    style={styles.upcomingIcon}
-                    onPress={() => {
-                      setSelectedEvent(e);
-                      setMode("event_chat");
-                    }}
-                  >
-                    <Text style={styles.upcomingInitial}>
-                      {e.title.charAt(0)}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+                {joinedEvents.map((e) => {
+                  const needsAction =
+                    e.status === "finalized" ||
+                    (e.time && new Date(e.time) <= new Date());
+                  return (
+                    <TouchableOpacity
+                      key={e.id}
+                      style={styles.upcomingIcon}
+                      onPress={() => {
+                        setSelectedEvent(e);
+                        setMode("event_chat");
+                      }}
+                    >
+                      <Text style={styles.upcomingInitial}>
+                        {e.title.charAt(0).toUpperCase()}
+                      </Text>
+                      {needsAction && (
+                        <View
+                          style={{
+                            position: "absolute",
+                            top: -1,
+                            right: -1,
+                            width: 12,
+                            height: 12,
+                            borderRadius: 6,
+                            backgroundColor: Colors.gold,
+                            borderWidth: 2,
+                            borderColor: "#1A2421",
+                          }}
+                        />
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
               </ScrollView>
             )}
           </View>
@@ -1300,6 +1358,63 @@ export default function MapScreen() {
             </BlurView>
           </TouchableOpacity>
         </View>
+
+        {/* Empty-map hint — without it, filters that match nothing make the
+            app look broken rather than quiet */}
+        {displayEvents.length === 0 && (
+          <View
+            style={{
+              position: "absolute",
+              bottom: 100,
+              left: 0,
+              right: 0,
+              alignItems: "center",
+            }}
+            pointerEvents="box-none"
+          >
+            <BlurView
+              intensity={65}
+              tint="dark"
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 8,
+                paddingHorizontal: 18,
+                paddingVertical: 12,
+                borderRadius: 9999,
+                overflow: "hidden",
+                borderWidth: 1,
+                borderColor: Colors.hairline,
+              }}
+            >
+              <Feather name="wind" size={13} color={Colors.textMuted} />
+              <Text
+                style={{
+                  fontFamily: Typography.bodyLight,
+                  fontSize: 13,
+                  color: Colors.textSecondary,
+                }}
+              >
+                {hasNarrowingFilters
+                  ? "No gatherings match your filters."
+                  : "The land is quiet. Light the first fire."}
+              </Text>
+              {hasNarrowingFilters && (
+                <TouchableOpacity onPress={clearAllFilters}>
+                  <Text
+                    style={{
+                      fontFamily: Typography.bodyMedium,
+                      fontSize: 13,
+                      color: Colors.gold,
+                    }}
+                  >
+                    Show all
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </BlurView>
+          </View>
+        )}
       </View>
     );
   };

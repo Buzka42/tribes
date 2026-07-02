@@ -4,6 +4,7 @@ import { styles } from './MapStyles';
 import { View, Text, Image, TouchableOpacity, TextInput, ScrollView, Platform, KeyboardAvoidingView, Share } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { Feather } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Typography } from '../theme';
 import { renderMoons, SPIRIT_ASSETS } from '../utils/assets';
 import { notify, confirmDialog } from '../utils/dialogs';
@@ -17,6 +18,7 @@ export const EventChat = (props: any) => {
       selectedEvent.participants?.includes(user?.uid || ""));
   const [chatText, setChatText] = useState('');
   const chatScrollRef = useRef<ScrollView>(null);
+  const insets = useSafeAreaInsets();
   const { messages, sendMessage } = useChatMessages(canChat ? selectedEvent.id : null);
 
   const handleSend = async () => {
@@ -60,7 +62,7 @@ export const EventChat = (props: any) => {
         <BlurView
           intensity={90}
           tint="dark"
-          style={styles.glassPanelBottomFull}
+          style={[styles.glassPanelBottomFull, { paddingBottom: 20 + insets.bottom }]}
         >
           <View
             style={{
@@ -166,9 +168,15 @@ export const EventChat = (props: any) => {
                     {creatorStats.name || "Unknown"}
                   </Text>
                 </TouchableOpacity>
-                <Text style={{ fontSize: 13, marginLeft: 8 }}>
-                  {renderMoons(creatorStats.ratingSum, creatorStats.ratingCount)}
-                </Text>
+                {creatorStats.ratingCount > 0 ? (
+                  <Text style={{ fontSize: 13, marginLeft: 8 }}>
+                    {renderMoons(creatorStats.ratingSum, creatorStats.ratingCount)}
+                  </Text>
+                ) : (
+                  <Text style={{ fontFamily: Typography.bodyLight, fontSize: 12, color: Colors.textMuted, marginLeft: 8 }}>
+                    New host
+                  </Text>
+                )}
               </View>
               {tribeInfo && !isPrivateTribe && (
                 <TouchableOpacity
@@ -295,7 +303,7 @@ export const EventChat = (props: any) => {
               }}
               numberOfLines={1}
             >
-              {selectedEvent.location.address || "Precise map location pinned"}
+              {selectedEvent.location.address || "Pinned on the map"}
             </Text>
           </View>
 

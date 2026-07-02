@@ -4,12 +4,14 @@ import { styles } from './MapStyles';
 import { View, Text, Image, TouchableOpacity, StyleSheet, TextInput, ScrollView, Platform, Alert, Share } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { Feather, Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Typography } from '../theme';
 import { SPIRIT_ASSETS, renderMoons } from '../utils/assets';
 
 export const TribePanel = (props: any) => {
   const { selectedTribe, setSelectedTribe, user, applyToTribe, leaveTribe, showManagement, setShowManagement, announcementText, setAnnouncementText, postAnnouncement, acceptApplicant, rejectApplicant, removeMember, deleteTribe, updateTribe, promoteMember, demoteMember, events, setMode, setSelectedEvent, setDraft, draft, setProfileViewUid, renderManagementOverlay } = props;
-  
+  const insets = useSafeAreaInsets();
+
     if (!selectedTribe) return null;
     const isChief = selectedTribe.creatorId === user?.uid;
     const isLeader =
@@ -41,7 +43,7 @@ export const TribePanel = (props: any) => {
             flexDirection: "row",
             alignItems: "center",
             paddingHorizontal: 16,
-            paddingTop: 50,
+            paddingTop: insets.top + 12,
             paddingBottom: 16,
             borderBottomWidth: 1,
             borderBottomColor: "rgba(255,255,255,0.06)",
@@ -172,7 +174,7 @@ export const TribePanel = (props: any) => {
           </View>
         </View>
 
-        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 80 }}>
+        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 60 + insets.bottom }}>
           {/* Member Actions */}
           {!isMember && !hasApplied && (
             <TouchableOpacity

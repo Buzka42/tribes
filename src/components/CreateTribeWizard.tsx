@@ -1,6 +1,7 @@
 import React from 'react';
 import { styles } from './MapStyles';
 import { View, Text, Image, TouchableOpacity, TextInput, ScrollView, KeyboardAvoidingView } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import { Feather, FontAwesome5 } from '@expo/vector-icons';
 import { Colors, Typography } from '../theme';
@@ -10,7 +11,8 @@ import { notify } from '../utils/dialogs';
 
 export const CreateTribeWizard = (props: any) => {
   const { wizardDraft, setWizardDraft, wizardStep, setWizardStep, createTribe, setMode, user, formTribeChecked, setFormTribeChecked } = props;
-  
+  const insets = useSafeAreaInsets();
+
     return (
       <KeyboardAvoidingView
         style={styles.sheetOverlay}
@@ -21,7 +23,7 @@ export const CreateTribeWizard = (props: any) => {
         <BlurView
           intensity={95}
           tint="dark"
-          style={styles.glassPanelBottomFull}
+          style={[styles.glassPanelBottomFull, { paddingBottom: 20 + insets.bottom }]}
         >
           {wizardStep === 1 && (
             <View style={{ flex: 1 }}>

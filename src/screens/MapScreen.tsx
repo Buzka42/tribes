@@ -22,6 +22,7 @@ import { TribePanel } from '../components/TribePanel';
 import { CreateTribeWizard } from '../components/CreateTribeWizard';
 import { ProfileModal } from '../components/ProfileModal';
 import { format, isToday, isTomorrow, isWeekend, addDays, startOfWeek, endOfWeek, addWeeks } from 'date-fns';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { notify } from '../utils/dialogs';
 import { Feather } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -37,6 +38,7 @@ export default function MapScreen() {
   const { events, joinEvent, createEvent, deleteEvent, finalizeEvent, submitFeedback, getUserFeedback } = useEvents();
   const { tribes, createTribe, applyToTribe, acceptApplicant, rejectApplicant, postAnnouncement, leaveTribe, removeMember, deleteTribe, updateTribe, promoteMember, demoteMember } = useTribes();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const insets = useSafeAreaInsets();
 
   // ── Mode & draft state ────────────────────────────────────────────────────
   const [mode, setMode] = useState<'map' | 'wizard_details' | 'wizard_location' | 'event_chat' | 'filters' | 'search_map' | 'tribe_panel' | 'create_tribe_wizard'>('map');
@@ -204,8 +206,12 @@ export default function MapScreen() {
     if (!e.participants?.includes(user?.uid || '')) return false;
     if (e.status === 'cancelled') return false;
     if (e.status === 'finalized') {
+      // Finalized events stay in the bar only while the participant still
+      // has a leaf to claim; once feedback exists they disappear for good.
       if (e.creatorId === user?.uid) return false;
       if (feedbackSubmitted[e.id]) return false;
+      const persisted = userFeedbackCache[e.id];
+      if (persisted && persisted !== 'none') return false;
       return true;
     }
     return true;
@@ -221,6 +227,18 @@ export default function MapScreen() {
   const liveSelectedTribe = selectedTribe
     ? tribes.find(t => t.id === selectedTribe.id) ?? selectedTribe
     : null;
+
+  const hasNarrowingFilters =
+    dateFilter !== 'All' ||
+    Object.keys(activeFilters).length > 0 ||
+    activeAgeFilters.length > 0 ||
+    activeGenderFilters.length > 0;
+  const clearAllFilters = () => {
+    setDateFilter('All');
+    setActiveFilters({});
+    setActiveAgeFilters([]);
+    setActiveGenderFilters([]);
+  };
 
   // ── Zoom-aware clustering ─────────────────────────────────────────────────
   const clusteredMarkers = React.useMemo(() => {
@@ -255,6 +273,24 @@ export default function MapScreen() {
     if (user.hasSeenTutorial) return;
     setTutStep(0);
   }, [user?.uid, user?.hasSeenTutorial]);
+
+  // Prefetch persisted feedback for finalized events the user joined, so the
+  // upcoming-events bar can hide the ones that were already rated — the
+  // in-session feedbackSubmitted flag alone is lost on every app restart.
+  React.useEffect(() => {
+    if (!user) return;
+    events
+      .filter(e =>
+        e.status === 'finalized' &&
+        e.creatorId !== user.uid &&
+        e.participants?.includes(user.uid) &&
+        userFeedbackCache[e.id] === undefined)
+      .forEach(e => {
+        getUserFeedback(e.id).then(fb => {
+          setUserFeedbackCache(prev => ({ ...prev, [e.id]: fb || 'none' }));
+        }).catch(() => {});
+      });
+  }, [events, user?.uid]);
 
   // ── Profile fetch ─────────────────────────────────────────────────────────
   React.useEffect(() => {
@@ -394,7 +430,7 @@ export default function MapScreen() {
           borderTopLeftRadius: 28, borderTopRightRadius: 28,
           borderTopWidth: 1, borderLeftWidth: 1, borderRightWidth: 1,
           borderColor: Colors.glassCardBorder,
-          padding: 24, paddingBottom: 44, maxHeight: '82%',
+          padding: 24, paddingBottom: 24 + insets.bottom, maxHeight: '82%',
         }}>
           {/* Header */}
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
@@ -552,14 +588,14 @@ export default function MapScreen() {
     return (
       <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
         {/* Settings */}
-        <TouchableOpacity style={styles.hudBtnTopRight} onPress={() => navigation.navigate('Settings')}>
+        <TouchableOpacity style={[styles.hudBtnTopRight, { top: insets.top + 10 }]} onPress={() => navigation.navigate('Settings')}>
           <BlurView intensity={60} tint="dark" style={styles.hudBlurBtn}>
             <Feather name="settings" size={17} color="rgba(255,255,255,0.7)" />
           </BlurView>
         </TouchableOpacity>
 
         {/* Locate */}
-        <TouchableOpacity style={[styles.hudBtnTopRight, { top: 112 }]} onPress={() => {
+        <TouchableOpacity style={[styles.hudBtnTopRight, { top: insets.top + 66 }]} onPress={() => {
           if (user?.homeLocation) {
             cameraRef.current?.setCamera({ centerCoordinate: [user.homeLocation.longitude, user.homeLocation.latitude], zoomLevel: 12.5, animationDuration: 1000 });
           }
@@ -570,14 +606,14 @@ export default function MapScreen() {
         </TouchableOpacity>
 
         {/* Search */}
-        <TouchableOpacity style={[styles.hudBtnTopRight, { top: 168 }]} onPress={() => setMode('search_map')}>
+        <TouchableOpacity style={[styles.hudBtnTopRight, { top: insets.top + 122 }]} onPress={() => setMode('search_map')}>
           <BlurView intensity={60} tint="dark" style={styles.hudBlurBtn}>
             <Feather name="search" size={17} color="rgba(255,255,255,0.7)" />
           </BlurView>
         </TouchableOpacity>
 
         {/* Top-left: balance + tribe + create */}
-        <View style={styles.topLeft} pointerEvents="box-none">
+        <View style={[styles.topLeft, { top: insets.top + 10 }]} pointerEvents="box-none">
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 16 }}>
             {/* Token balance */}
             <BlurView intensity={60} tint="dark" style={styles.balancePill}>
@@ -602,18 +638,22 @@ export default function MapScreen() {
             </TouchableOpacity>
             {joinedEvents.length > 0 && (
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.upcomingScroll}>
-                {joinedEvents.map(e => (
-                  <TouchableOpacity key={e.id} style={styles.upcomingIcon} onPress={() => { setSelectedEvent(e); setMode('event_chat'); }}>
-                    <Text style={styles.upcomingInitial}>{e.title.charAt(0).toUpperCase()}</Text>
-                  </TouchableOpacity>
-                ))}
+                {joinedEvents.map(e => {
+                  const needsAction = e.status === 'finalized' || (e.time && new Date(e.time) <= new Date());
+                  return (
+                    <TouchableOpacity key={e.id} style={styles.upcomingIcon} onPress={() => { setSelectedEvent(e); setMode('event_chat'); }}>
+                      <Text style={styles.upcomingInitial}>{e.title.charAt(0).toUpperCase()}</Text>
+                      {needsAction && <View style={styles.actionDot} />}
+                    </TouchableOpacity>
+                  );
+                })}
               </ScrollView>
             )}
           </View>
         </View>
 
         {/* Bottom bar */}
-        <View style={styles.bottomBar} pointerEvents="box-none">
+        <View style={[styles.bottomBar, { bottom: insets.bottom + 22 }]} pointerEvents="box-none">
           <BlurView intensity={55} tint="dark" style={styles.dateSlider}>
             {canScrollLeft && (
               <TouchableOpacity style={styles.sliderArrow} onPress={() => scrollRef.current?.scrollTo({ x: Math.max(0, scrollX - 150), animated: true })}>
@@ -641,6 +681,29 @@ export default function MapScreen() {
             </BlurView>
           </TouchableOpacity>
         </View>
+
+        {/* Empty-map hint — without it, filters that match nothing make the
+            app look broken rather than quiet */}
+        {displayEvents.length === 0 && (
+          <View
+            style={{ position: 'absolute', bottom: insets.bottom + 84, left: 0, right: 0, alignItems: 'center' }}
+            pointerEvents="box-none"
+          >
+            <BlurView intensity={65} tint="dark" style={styles.emptyHintPill}>
+              <Feather name="wind" size={13} color={Colors.textMuted} />
+              <Text style={styles.emptyHintText}>
+                {hasNarrowingFilters
+                  ? 'No gatherings match your filters.'
+                  : 'The land is quiet. Light the first fire.'}
+              </Text>
+              {hasNarrowingFilters && (
+                <TouchableOpacity onPress={clearAllFilters}>
+                  <Text style={styles.emptyHintAction}>Show all</Text>
+                </TouchableOpacity>
+              )}
+            </BlurView>
+          </View>
+        )}
       </View>
     );
   };
@@ -649,7 +712,7 @@ export default function MapScreen() {
   const renderMapSearch = () => {
     if (mode !== 'search_map') return null;
     return (
-      <View style={{ position: 'absolute', top: 50, left: 16, right: 16, zIndex: 1000 }}>
+      <View style={{ position: 'absolute', top: insets.top + 10, left: 16, right: 16, zIndex: 1000 }}>
         <BlurView intensity={85} tint="dark" style={{ borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: Colors.hairline }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 8 }}>
             <Feather name="search" size={16} color={Colors.textMuted} style={{ marginRight: 10 }} />
@@ -795,7 +858,7 @@ export default function MapScreen() {
       </ScrollView>
 
       {/* Sticky actions */}
-      <View style={styles.sheetActions}>
+      <View style={[styles.sheetActions, { paddingBottom: 16 + insets.bottom }]}>
         <TouchableOpacity style={[styles.btnSecondary, { flex: 1 }]} onPress={() => setMode('map')}>
           <Text style={styles.btnSecondaryText}>Cancel</Text>
         </TouchableOpacity>
@@ -812,7 +875,7 @@ export default function MapScreen() {
 
   // ── Wizard: Pin Location ──────────────────────────────────────────────────
   const renderWizardLocation = () => (
-    <View style={{ position: 'absolute', top: 50, left: 16, right: 16 }}>
+    <View style={{ position: 'absolute', top: insets.top + 10, left: 16, right: 16 }}>
       <View style={{ backgroundColor: 'rgba(26,36,33,0.94)', borderRadius: 20, padding: 22, borderWidth: 1, borderColor: Colors.hairline }}>
         <Text style={styles.sheetTitle}>Drop the Pin</Text>
         <Text style={styles.sheetSub}>Tap anywhere on the map to set the exact location.</Text>
@@ -835,7 +898,7 @@ export default function MapScreen() {
 
   // ── Filters ───────────────────────────────────────────────────────────────
   const renderFilters = () => (
-    <View style={styles.bottomSheetFull}>
+    <View style={[styles.bottomSheetFull, { paddingBottom: 16 + insets.bottom }]}>
       <View style={[styles.chatHeader, { paddingBottom: 0 }]}>
         <View style={{ flex: 1 }}>
           <Text style={styles.sheetTitle}>Filter Gatherings</Text>
@@ -1177,6 +1240,11 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   upcomingInitial: { fontFamily: Typography.bodyMedium, color: Colors.textPrimary, fontSize: 14 },
+  actionDot: {
+    position: 'absolute', top: -1, right: -1,
+    width: 12, height: 12, borderRadius: 6,
+    backgroundColor: Colors.gold, borderWidth: 2, borderColor: '#1A2421',
+  },
 
   // Bottom bar
   bottomBar: {
@@ -1204,6 +1272,15 @@ const styles = StyleSheet.create({
   },
   filterPillActive: { backgroundColor: Colors.gold, borderColor: 'rgba(255,220,175,0.3)' },
   filterPillCount: { fontFamily: Typography.bodyMedium, color: '#1A2421', fontSize: 12 },
+
+  emptyHintPill: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingHorizontal: 18, paddingVertical: 12,
+    borderRadius: 9999, overflow: 'hidden',
+    borderWidth: 1, borderColor: Colors.hairline,
+  },
+  emptyHintText: { fontFamily: Typography.bodyLight, fontSize: 13, color: Colors.textSecondary },
+  emptyHintAction: { fontFamily: Typography.bodyMedium, fontSize: 13, color: Colors.gold },
 
   // ── Dev panel ────────────────────────────────────────────────────────────
   devPanel: {

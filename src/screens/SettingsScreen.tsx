@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../hooks/useAuth';
 import { Colors, Typography } from '../theme';
 import { Feather } from '@expo/vector-icons';
@@ -15,6 +16,7 @@ import { db } from '../config/firebase';
 export default function SettingsScreen() {
   const { user } = useAuth();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const insets = useSafeAreaInsets();
 
   const [displayName, setDisplayName] = useState(user?.displayName || '');
   const [dateOfBirth, setDateOfBirth] = useState(user?.dateOfBirth || '');
@@ -64,7 +66,7 @@ export default function SettingsScreen() {
   return (
     <KeyboardAvoidingView behavior="padding" style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 14 }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
           <Feather name="arrow-left" size={22} color={Colors.textSecondary} />
         </TouchableOpacity>
@@ -200,7 +202,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'ios' ? 58 : 40,
     paddingBottom: 18,
     borderBottomWidth: 1,
     borderBottomColor: Colors.hairline,

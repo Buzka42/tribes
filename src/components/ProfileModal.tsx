@@ -41,9 +41,15 @@ export const ProfileModal = (props: any) => {
               <View style={{ flexDirection: "row", gap: 20, borderTopWidth: 1, borderTopColor: Colors.hairline, paddingTop: 16, width: "100%", justifyContent: "center", alignItems: "center" }}>
                 <View style={{ alignItems: "center" }}>
                   <Text style={{ fontSize: 13, fontFamily: Typography.bodySemibold, color: Colors.textSecondary }}>Host Rating</Text>
-                  <Text style={{ fontSize: 20, marginTop: 4 }}>
-                    {renderMoons(profileViewData.ratingSum || 0, profileViewData.ratingCount || 0)}
-                  </Text>
+                  {(profileViewData.ratingCount || 0) > 0 ? (
+                    <Text style={{ fontSize: 20, marginTop: 4 }}>
+                      {renderMoons(profileViewData.ratingSum || 0, profileViewData.ratingCount || 0)}
+                    </Text>
+                  ) : (
+                    <Text style={{ fontSize: 12, fontFamily: Typography.bodyLight, color: Colors.textMuted, marginTop: 6 }}>
+                      No ratings yet
+                    </Text>
+                  )}
                 </View>
               </View>
             </>

@@ -8,10 +8,12 @@ import { Colors, Typography } from '../theme';
 import { SPIRIT_ASSETS, SPIRIT_LABELS } from '../utils/assets';
 import { EVENT_CATEGORIES } from '../data/categories';
 import { notify } from '../utils/dialogs';
+import { useI18n } from '../i18n';
 
 export const CreateTribeWizard = (props: any) => {
   const { wizardDraft, setWizardDraft, wizardStep, setWizardStep, createTribe, setMode, user, formTribeChecked, setFormTribeChecked } = props;
   const insets = useSafeAreaInsets();
+  const { t, tValue } = useI18n();
 
     return (
       <KeyboardAvoidingView
@@ -42,7 +44,7 @@ export const CreateTribeWizard = (props: any) => {
                     flex: 1,
                   }}
                 >
-                  Form a Tribe
+                  {t('createTribe.title')}
                 </Text>
                 <TouchableOpacity onPress={() => setMode("map")}>
                   <Feather name="x" size={24} color={Colors.text} />
@@ -57,8 +59,7 @@ export const CreateTribeWizard = (props: any) => {
                   lineHeight: 18,
                 }}
               >
-                You successfully hosted an event! Now you have the right to form
-                a permanent Tribe with the attendees.
+                {t('createTribe.intro')}
               </Text>
 
               <Text
@@ -69,11 +70,11 @@ export const CreateTribeWizard = (props: any) => {
                   marginBottom: 6,
                 }}
               >
-                Tribe Name
+                {t('createTribe.name')}
               </Text>
               <TextInput
                 style={styles.input}
-                placeholder="e.g. Weekend Warriors"
+                placeholder={t('createTribe.namePlaceholder')}
                 placeholderTextColor={Colors.textPlaceholder}
                 value={wizardDraft.name}
                 onChangeText={(t) =>
@@ -89,12 +90,12 @@ export const CreateTribeWizard = (props: any) => {
                   marginBottom: 6,
                 }}
               >
-                Description
+                {t('createTribe.description')}
               </Text>
               <TextInput
                 style={[styles.input, { height: 80 }]}
                 multiline
-                placeholder="What is this tribe about?"
+                placeholder={t('createTribe.descriptionPlaceholder')}
                 placeholderTextColor={Colors.textPlaceholder}
                 value={wizardDraft.description}
                 onChangeText={(t) =>
@@ -110,7 +111,7 @@ export const CreateTribeWizard = (props: any) => {
                   marginBottom: 6,
                 }}
               >
-                Main Interest Category
+                {t('createTribe.category')}
               </Text>
               <ScrollView
                 horizontal
@@ -149,7 +150,7 @@ export const CreateTribeWizard = (props: any) => {
                         fontSize: 13,
                       }}
                     >
-                      {cat.label}
+                      {tValue('categories', cat.id)}
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -157,7 +158,7 @@ export const CreateTribeWizard = (props: any) => {
               {wizardDraft.categoryId && (EVENT_CATEGORIES.find(c => c.id === wizardDraft.categoryId)?.subgroups || []).length > 0 && (
                 <>
                   <Text style={{ fontFamily: Typography.bodyBold, fontSize: 13, color: Colors.text, marginBottom: 6 }}>
-                    Specific Interests (Optional)
+                    {t('createTribe.interests')}
                   </Text>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 20 }}>
                     {EVENT_CATEGORIES.find(c => c.id === wizardDraft.categoryId)?.subgroups.map(sub => (
@@ -176,7 +177,7 @@ export const CreateTribeWizard = (props: any) => {
                           wizardDraft.categorySub?.includes(sub) && styles.wizardSubCatActive
                         ]}
                       >
-                        <Text style={wizardDraft.categorySub?.includes(sub) ? styles.wizardSubCatText : { fontFamily: Typography.bodySemibold, fontSize: 13, color: Colors.textLight } }>{sub}</Text>
+                        <Text style={wizardDraft.categorySub?.includes(sub) ? styles.wizardSubCatText : { fontFamily: Typography.bodySemibold, fontSize: 13, color: Colors.textLight } }>{tValue('subgroups', sub)}</Text>
                       </TouchableOpacity>
                     ))}
                   </ScrollView>
@@ -194,7 +195,7 @@ export const CreateTribeWizard = (props: any) => {
                 ]}
                 onPress={() => setWizardStep(2)}
               >
-                <Text style={styles.btnPrimaryText}>Next: Choose a Spirit</Text>
+                <Text style={styles.btnPrimaryText}>{t('createTribe.nextSpirit')}</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -222,7 +223,7 @@ export const CreateTribeWizard = (props: any) => {
                     flex: 1,
                   }}
                 >
-                  Choose a Spirit
+                  {t('createTribe.spiritTitle')}
                 </Text>
               </View>
               <Text
@@ -234,8 +235,7 @@ export const CreateTribeWizard = (props: any) => {
                   lineHeight: 18,
                 }}
               >
-                The spirit acts as an emblem for your tribe. It will represent
-                your group on the map.
+                {t('createTribe.spiritHint')}
               </Text>
 
               <View
@@ -290,7 +290,7 @@ export const CreateTribeWizard = (props: any) => {
                             : Colors.textSecondary,
                       }}
                     >
-                      {SPIRIT_LABELS[key]}
+                      {tValue('spirits', key)}
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -301,7 +301,7 @@ export const CreateTribeWizard = (props: any) => {
                 onPress={() => setWizardStep(3)}
               >
                 <Text style={styles.btnPrimaryText}>
-                  Next: Privacy & Review
+                  {t('createTribe.nextPrivacy')}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -330,7 +330,7 @@ export const CreateTribeWizard = (props: any) => {
                     flex: 1,
                   }}
                 >
-                  Final Step
+                  {t('createTribe.finalStep')}
                 </Text>
               </View>
 
@@ -352,7 +352,7 @@ export const CreateTribeWizard = (props: any) => {
                     marginBottom: 10,
                   }}
                 >
-                  Privacy Settings
+                  {t('createTribe.privacy')}
                 </Text>
                 <TouchableOpacity
                   onPress={() =>
@@ -403,7 +403,7 @@ export const CreateTribeWizard = (props: any) => {
                         color: Colors.text,
                       }}
                     >
-                      Public Tribe
+                      {t('createTribe.publicTribe')}
                     </Text>
                     <Text
                       style={{
@@ -412,7 +412,7 @@ export const CreateTribeWizard = (props: any) => {
                         color: Colors.textLight,
                       }}
                     >
-                      Anyone can see your events tagged with this tribe.
+                      {t('createTribe.publicHint')}
                     </Text>
                   </View>
                 </TouchableOpacity>
@@ -464,7 +464,7 @@ export const CreateTribeWizard = (props: any) => {
                         color: Colors.text,
                       }}
                     >
-                      Private Tribe
+                      {t('createTribe.privateTribe')}
                     </Text>
                     <Text
                       style={{
@@ -473,8 +473,7 @@ export const CreateTribeWizard = (props: any) => {
                         color: Colors.textLight,
                       }}
                     >
-                      Your tribe name and badge will be hidden from public
-                      events. Invitation only.
+                      {t('createTribe.privateHint')}
                     </Text>
                   </View>
                 </TouchableOpacity>
@@ -488,8 +487,7 @@ export const CreateTribeWizard = (props: any) => {
                     textAlign: "center",
                   }}
                 >
-                  By planting this seed, you invite the attendees of your last
-                  event to join your new tribe immediately.
+                  {t('createTribe.seedHint')}
                 </Text>
               </View>
 
@@ -507,10 +505,10 @@ export const CreateTribeWizard = (props: any) => {
                       wizardDraft.categorySub
                     );
                   } catch (e: any) {
-                    notify('Something went wrong', e.message);
+                    notify(t('common.error'), e.message);
                     return;
                   }
-                  notify('Your tribe has been planted', 'Welcome, Chief.');
+                  notify(t('createTribe.plantedTitle'), t('createTribe.plantedBody'));
                   setMode("map");
                   setWizardStep(0);
                   setWizardDraft({
@@ -526,7 +524,7 @@ export const CreateTribeWizard = (props: any) => {
                 }}
               >
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
-                  <Text style={styles.btnPrimaryText}>Plant the Tribe</Text>
+                  <Text style={styles.btnPrimaryText}>{t('createTribe.plant')}</Text>
                   <Image
                     source={require('../assets/leaf.png')}
                     style={{ width: 15, height: 15, resizeMode: 'contain' }}

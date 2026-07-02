@@ -2,6 +2,7 @@ import React from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AppNavigator from './src/navigation/AppNavigator';
 import { AuthProvider } from './src/hooks/useAuth';
+import { LanguageProvider } from './src/i18n';
 import { useFonts } from 'expo-font';
 import {
   Merriweather_700Bold,
@@ -33,9 +34,11 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <AuthProvider>
-        <AppNavigator />
-      </AuthProvider>
+      <LanguageProvider>
+        <AuthProvider>
+          <AppNavigator />
+        </AuthProvider>
+      </LanguageProvider>
     </SafeAreaProvider>
   );
 }

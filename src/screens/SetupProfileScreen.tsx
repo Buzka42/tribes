@@ -7,9 +7,11 @@ import { useAuth } from '../hooks/useAuth';
 import { db } from '../config/firebase';
 import { doc, updateDoc } from 'firebase/firestore';
 import { Colors, Typography } from '../theme';
+import { useI18n } from '../i18n';
 
 export default function SetupProfileScreen() {
   const { user } = useAuth();
+  const { t } = useI18n();
   const [name, setName] = useState(
     user?.displayName && user.displayName !== 'User' ? user.displayName : ''
   );
@@ -50,7 +52,7 @@ export default function SetupProfileScreen() {
           : user?.homeLocation || null,
       });
     } catch (e) {
-      setErrorMsg('Could not save your profile. Check your connection and try again.');
+      setErrorMsg(t('setup.saveError'));
       setSaving(false);
     }
   };
@@ -65,24 +67,24 @@ export default function SetupProfileScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
-        <Text style={styles.title}>Manifest Your Presence</Text>
-        <Text style={styles.subtitle}>Let the tribe know who you are and where you roam.</Text>
+        <Text style={styles.title}>{t('setup.title')}</Text>
+        <Text style={styles.subtitle}>{t('setup.subtitle')}</Text>
 
         {/* Display Name */}
-        <Text style={styles.fieldLabel}>DISPLAY NAME</Text>
+        <Text style={styles.fieldLabel}>{t('setup.displayName')}</Text>
         <TextInput
           style={styles.input}
-          placeholder="First name (recommended)"
+          placeholder={t('setup.displayNamePlaceholder')}
           placeholderTextColor={Colors.textPlaceholder}
           value={name}
           onChangeText={setName}
         />
 
         {/* Home Base */}
-        <Text style={styles.fieldLabel}>HOME BASE</Text>
+        <Text style={styles.fieldLabel}>{t('setup.homeBase')}</Text>
         <TextInput
           style={styles.input}
-          placeholder="City or street address"
+          placeholder={t('setup.homeBasePlaceholder')}
           placeholderTextColor={Colors.textPlaceholder}
           value={selectedLoc ? selectedLoc.place_name : query}
           onChangeText={(v) => { setSelectedLoc(null); searchLocation(v); }}
@@ -102,35 +104,37 @@ export default function SetupProfileScreen() {
         )}
 
         {/* Date of Birth */}
-        <Text style={styles.fieldLabel}>DATE OF BIRTH</Text>
+        <Text style={styles.fieldLabel}>{t('setup.dateOfBirth')}</Text>
         <TextInput
           style={styles.input}
-          placeholder="YYYY-MM-DD"
+          placeholder={t('setup.dateOfBirthPlaceholder')}
           placeholderTextColor={Colors.textPlaceholder}
           value={dateOfBirth}
           onChangeText={setDateOfBirth}
         />
 
-        {/* Sex */}
-        <Text style={styles.fieldLabel}>IDENTITY</Text>
+        {/* Sex — stored as English values, displayed translated */}
+        <Text style={styles.fieldLabel}>{t('setup.identity')}</Text>
         <View style={styles.chipRow}>
-          {['Male', 'Female', 'Other'].map(s => (
+          {(['Male', 'Female', 'Other'] as const).map(s => (
             <TouchableOpacity
               key={s}
               onPress={() => setSex(s)}
               style={[styles.chip, sex === s && styles.chipActive]}
               activeOpacity={0.75}
             >
-              <Text style={[styles.chipText, sex === s && styles.chipTextActive]}>{s}</Text>
+              <Text style={[styles.chipText, sex === s && styles.chipTextActive]}>
+                {{ Male: t('setup.male'), Female: t('setup.female'), Other: t('setup.other') }[s]}
+              </Text>
             </TouchableOpacity>
           ))}
         </View>
 
         {/* Bio */}
-        <Text style={styles.fieldLabel}>SHORT BIO</Text>
+        <Text style={styles.fieldLabel}>{t('setup.shortBio')}</Text>
         <TextInput
           style={[styles.input, styles.inputMulti]}
-          placeholder="What drives you? (Optional, max 250 chars)"
+          placeholder={t('setup.bioPlaceholder')}
           placeholderTextColor={Colors.textPlaceholder}
           value={description}
           onChangeText={setDescription}
@@ -151,7 +155,7 @@ export default function SetupProfileScreen() {
           onPress={handleFinish}
           activeOpacity={0.82}
         >
-          <Text style={styles.btnPrimaryText}>{saving ? 'Preparing your path…' : 'Enter The Tribes'}</Text>
+          <Text style={styles.btnPrimaryText}>{saving ? t('setup.entering') : t('setup.enter')}</Text>
         </TouchableOpacity>
       </ScrollView>
     </KeyboardAvoidingView>

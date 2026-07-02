@@ -9,6 +9,7 @@ import { Colors, Typography } from '../theme';
 import { renderMoons, SPIRIT_ASSETS } from '../utils/assets';
 import { notify, confirmDialog } from '../utils/dialogs';
 import { useChatMessages } from '../hooks/useChatMessages';
+import { useI18n } from '../i18n';
 
 export const EventChat = (props: any) => {
   const { selectedEvent, setSelectedEvent, setMode, user, events, joinEvent, leaveEvent, deleteEvent, finalizeEvent, finalizeChecked, setFinalizeChecked, submitFeedback, feedbackAnswer, setFeedbackAnswer, feedbackSubmitted, setFeedbackSubmitted, getUserFeedback, userFeedbackCache, setUserFeedbackCache, creatorStatsCache, setCreatorStatsCache, participantNamesCache, setParticipantNamesCache, getParticipantNames, tribes, setProfileViewUid, setSelectedTribe, handleJoin, setFormTribeChecked, formTribeChecked, setWizardDraft, setWizardStep } = props;
@@ -19,6 +20,7 @@ export const EventChat = (props: any) => {
   const [chatText, setChatText] = useState('');
   const chatScrollRef = useRef<ScrollView>(null);
   const insets = useSafeAreaInsets();
+  const { t, dateLocale } = useI18n();
   const { messages, sendMessage } = useChatMessages(canChat ? selectedEvent.id : null);
 
   const handleSend = async () => {
@@ -29,7 +31,7 @@ export const EventChat = (props: any) => {
       await sendMessage(selectedEvent.id, text, user?.displayName || 'Tribesman');
     } catch (e: any) {
       setChatText(text); // give the draft back so nothing is lost
-      notify('Message not sent', e.message);
+      notify(t('chat.messageFailed'), e.message);
     }
   };
 
@@ -42,7 +44,7 @@ export const EventChat = (props: any) => {
       selectedEvent.status === "finalized" ||
       selectedEvent.status === "cancelled";
     const creatorStats = creatorStatsCache[selectedEvent.creatorId] || {
-      name: "Unknown",
+      name: t('common.unknown'),
       ratingSum: 0,
       ratingCount: 0,
     };
@@ -111,7 +113,7 @@ export const EventChat = (props: any) => {
                         letterSpacing: 0.6,
                       }}
                     >
-                      PRIVATE TRIBE
+                      {t('chat.privateTribe')}
                     </Text>
                   </View>
                 )}
@@ -134,7 +136,7 @@ export const EventChat = (props: any) => {
                         fontWeight: "bold",
                       }}
                     >
-                      {selectedEvent.status?.toUpperCase() || ""}
+                      {selectedEvent.status === "cancelled" ? t('chat.cancelled') : t('chat.finalized')}
                     </Text>
                   </View>
                 )}
@@ -146,15 +148,18 @@ export const EventChat = (props: any) => {
                   color: Colors.textLight,
                 }}
               >
-                {selectedEvent.participants.length} /{" "}
-                {selectedEvent.participantLimit} Attending •{" "}
+                {t('chat.attending', {
+                  n: selectedEvent.participants.length,
+                  limit: selectedEvent.participantLimit,
+                })}{" "}
+                •{" "}
                 {selectedEvent.time
-                  ? format(new Date(selectedEvent.time), "MMM d, h:mm a")
-                  : "TBD"}
+                  ? format(new Date(selectedEvent.time), t('dates.eventTime'), { locale: dateLocale })
+                  : t('chat.tbd')}
               </Text>
               <View style={{ flexDirection: "row", alignItems: "center", marginTop: 8 }}>
                 <Text style={{ fontFamily: Typography.bodySemibold, fontSize: 13, color: Colors.text }}>
-                  Host:{" "}
+                  {t('chat.host')}{" "}
                 </Text>
                 <TouchableOpacity onPress={() => setProfileViewUid(selectedEvent.creatorId)}>
                   <Text
@@ -165,7 +170,7 @@ export const EventChat = (props: any) => {
                       textDecorationLine: "underline",
                     }}
                   >
-                    {creatorStats.name || "Unknown"}
+                    {creatorStats.name || t('common.unknown')}
                   </Text>
                 </TouchableOpacity>
                 {creatorStats.ratingCount > 0 ? (
@@ -174,7 +179,7 @@ export const EventChat = (props: any) => {
                   </Text>
                 ) : (
                   <Text style={{ fontFamily: Typography.bodyLight, fontSize: 12, color: Colors.textMuted, marginLeft: 8 }}>
-                    New host
+                    {t('chat.newHost')}
                   </Text>
                 )}
               </View>
@@ -208,7 +213,7 @@ export const EventChat = (props: any) => {
                       fontFamily: Typography.bodySemibold,
                     }}
                   >
-                    Hosted by {tribeInfo.name}
+                    {t('chat.hostedBy', { name: tribeInfo.name })}
                   </Text>
                 </TouchableOpacity>
               )}
@@ -219,14 +224,14 @@ export const EventChat = (props: any) => {
                       const link = `${window.location.origin}${window.location.pathname}?joinEvent=${selectedEvent.id}`;
                       try {
                         await navigator.clipboard.writeText(link);
-                        notify('Invite link copied');
+                        notify(t('chat.inviteCopied'));
                       } catch {
-                        window.prompt('Copy this invite link:', link);
+                        window.prompt(t('chat.invitePrompt'), link);
                       }
                     } else {
                       try {
                         await Share.share({
-                          message: `Join "${selectedEvent.title}" on Tribes! Event code: ${selectedEvent.id}`,
+                          message: t('chat.inviteShare', { title: selectedEvent.title, id: selectedEvent.id }),
                           title: selectedEvent.title,
                         });
                       } catch { /* user dismissed share sheet */ }
@@ -248,7 +253,7 @@ export const EventChat = (props: any) => {
                 >
                   <Feather name="link" size={12} color={Colors.gold} />
                   <Text style={{ fontSize: 12, color: Colors.gold, fontFamily: Typography.bodySemibold }}>
-                    Copy Invite Link
+                    {t('chat.copyInvite')}
                   </Text>
                 </TouchableOpacity>
               )}
@@ -262,9 +267,9 @@ export const EventChat = (props: any) => {
                     return;
                   }
                   const ok = await confirmDialog(
-                    'Cancel this gathering?',
-                    'Your 5 Leaves will be refunded and participants get theirs back.',
-                    'Cancel Event',
+                    t('chat.deleteTitle'),
+                    t('chat.deleteBody'),
+                    t('chat.deleteConfirm'),
                     true,
                   );
                   if (ok) {
@@ -273,7 +278,7 @@ export const EventChat = (props: any) => {
                       setSelectedEvent(null);
                       setMode("map");
                     } catch (e: any) {
-                      notify('Something went wrong', e.message);
+                      notify(t('common.error'), e.message);
                     }
                   }
                 }}
@@ -303,7 +308,7 @@ export const EventChat = (props: any) => {
               }}
               numberOfLines={1}
             >
-              {selectedEvent.location.address || "Pinned on the map"}
+              {selectedEvent.location.address || t('chat.pinnedOnMap')}
             </Text>
           </View>
 
@@ -313,14 +318,14 @@ export const EventChat = (props: any) => {
               <View style={styles.chatLockedIconWrap}>
                 <Feather name="lock" size={24} color={Colors.gold} />
               </View>
-              <Text style={styles.chatLockedTitle}>Tribal Chat is Sealed</Text>
+              <Text style={styles.chatLockedTitle}>{t('chat.sealedTitle')}</Text>
               <Text style={styles.chatLockedSub}>
-                Commit 1{" "}
+                {t('chat.sealedBodyPrefix')}{" "}
                 <Image
                   source={require("../assets/leaf.png")}
                   style={styles.inlineIcon}
                 />{" "}
-                to join this gathering.
+                {t('chat.sealedBodySuffix')}
               </Text>
               <TouchableOpacity
                 style={[styles.btnPrimaryFull, isFinalized && { opacity: 0.5 }]}
@@ -328,7 +333,7 @@ export const EventChat = (props: any) => {
                 onPress={handleJoin}
               >
                 <Text style={styles.btnPrimaryText}>
-                  {isFinalized ? "Event Concluded" : "Join · 1 Leaf"}
+                  {isFinalized ? t('chat.concluded') : t('chat.joinCta')}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -349,7 +354,7 @@ export const EventChat = (props: any) => {
                   <View style={styles.chatEmptyRow}>
                     <Feather name="wind" size={13} color={Colors.textMuted} />
                     <Text style={styles.chatEmptyText}>
-                      The fire is lit. Say hello to the tribe.
+                      {t('chat.emptyChat')}
                     </Text>
                   </View>
                 ) : (
@@ -376,7 +381,7 @@ export const EventChat = (props: any) => {
                           <Text style={styles.msgText}>{m.text}</Text>
                         </View>
                         <Text style={styles.msgTime}>
-                          {m.createdAt ? format(m.createdAt, 'HH:mm') : 'sending…'}
+                          {m.createdAt ? format(m.createdAt, 'HH:mm') : t('chat.sending')}
                         </Text>
                       </View>
                     );
@@ -408,7 +413,7 @@ export const EventChat = (props: any) => {
                         color: Colors.accent,
                       }}
                     >
-                      The Event Has Passed
+                      {t('chat.pastTitle')}
                     </Text>
                   </View>
                   <Text
@@ -419,8 +424,7 @@ export const EventChat = (props: any) => {
                       marginBottom: 16,
                     }}
                   >
-                    Mark who attended. You will receive your 5 leaves back if
-                    you confirm it happened.
+                    {t('chat.pastBody')}
                   </Text>
                   <View
                     style={{
@@ -437,7 +441,7 @@ export const EventChat = (props: any) => {
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                         <Feather name="thumbs-up" size={14} color={feedbackAnswer.eventHappened === true ? Colors.gold : Colors.textSecondary} />
                         <Text style={{ fontFamily: Typography.bodyBold, color: feedbackAnswer.eventHappened === true ? Colors.gold : Colors.textSecondary }}>
-                          It Happened
+                          {t('chat.itHappened')}
                         </Text>
                       </View>
                     </TouchableOpacity>
@@ -448,7 +452,7 @@ export const EventChat = (props: any) => {
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                         <Feather name="thumbs-down" size={14} color={feedbackAnswer.eventHappened === false ? Colors.danger : Colors.textSecondary} />
                         <Text style={{ fontFamily: Typography.bodyBold, color: feedbackAnswer.eventHappened === false ? Colors.danger : Colors.textSecondary }}>
-                          Cancelled
+                          {t('chat.itWasCancelled')}
                         </Text>
                       </View>
                     </TouchableOpacity>
@@ -463,7 +467,7 @@ export const EventChat = (props: any) => {
                             marginBottom: 8,
                           }}
                         >
-                          Tick who showed up:
+                          {t('chat.tickAttendees')}
                         </Text>
                         {selectedEvent.participants
                           .filter((p: any) => p !== user.uid)
@@ -529,7 +533,7 @@ export const EventChat = (props: any) => {
                         {formTribeChecked && <Feather name="check" size={14} color={Colors.gold} />}
                       </View>
                       <Text style={{ fontFamily: Typography.bodySemibold, color: Colors.text }}>
-                        Form a permanent Tribe from these attendees
+                        {t('chat.formTribe')}
                       </Text>
                     </TouchableOpacity>
                   )}
@@ -564,11 +568,11 @@ export const EventChat = (props: any) => {
                       } else {
                         setSelectedEvent(null);
                         setMode("map");
-                        notify('Event finalized', 'Your Leaves have been refunded.');
+                        notify(t('chat.finalizedTitle'), t('chat.finalizedBody'));
                       }
                     }}
                   >
-                    <Text style={styles.btnPrimaryText}>Lock & Finalize</Text>
+                    <Text style={styles.btnPrimaryText}>{t('chat.lockFinalize')}</Text>
                   </TouchableOpacity>
                 </View>
               )}
@@ -601,7 +605,7 @@ export const EventChat = (props: any) => {
                           color: Colors.accent,
                         }}
                       >
-                        Claim Your Leaf Back
+                        {t('chat.claimTitle')}
                       </Text>
                     </View>
                     <Text
@@ -612,8 +616,7 @@ export const EventChat = (props: any) => {
                         marginBottom: 16,
                       }}
                     >
-                      Fill out this quick survey to immediately get your 1 leaf
-                      back.
+                      {t('chat.claimBody')}
                     </Text>
 
                     <Text
@@ -623,7 +626,7 @@ export const EventChat = (props: any) => {
                         marginBottom: 8,
                       }}
                     >
-                      Did the event actually happen?
+                      {t('chat.didItHappen')}
                     </Text>
                     <View
                       style={{
@@ -639,7 +642,7 @@ export const EventChat = (props: any) => {
                       >
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                           <Feather name="thumbs-up" size={14} color={feedbackAnswer.eventHappened === true ? Colors.gold : Colors.textSecondary} />
-                          <Text style={{ fontFamily: Typography.bodyBold, color: feedbackAnswer.eventHappened === true ? Colors.gold : Colors.textSecondary }}>Yes</Text>
+                          <Text style={{ fontFamily: Typography.bodyBold, color: feedbackAnswer.eventHappened === true ? Colors.gold : Colors.textSecondary }}>{t('common.yes')}</Text>
                         </View>
                       </TouchableOpacity>
                       <TouchableOpacity
@@ -648,7 +651,7 @@ export const EventChat = (props: any) => {
                       >
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                           <Feather name="thumbs-down" size={14} color={feedbackAnswer.eventHappened === false ? Colors.danger : Colors.textSecondary} />
-                          <Text style={{ fontFamily: Typography.bodyBold, color: feedbackAnswer.eventHappened === false ? Colors.danger : Colors.textSecondary }}>No</Text>
+                          <Text style={{ fontFamily: Typography.bodyBold, color: feedbackAnswer.eventHappened === false ? Colors.danger : Colors.textSecondary }}>{t('common.no')}</Text>
                         </View>
                       </TouchableOpacity>
                     </View>
@@ -662,7 +665,7 @@ export const EventChat = (props: any) => {
                             marginBottom: 8,
                           }}
                         >
-                          How would you rate the experience?
+                          {t('chat.rateIt')}
                         </Text>
                         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
                           {["🌑", "🌒", "🌓", "🌔", "🌕"].map((moon, index) => {
@@ -720,13 +723,13 @@ export const EventChat = (props: any) => {
                           ...prev,
                           [selectedEvent.id]: true,
                         }));
-                        notify('Feedback received', '1 Leaf returned to your pouch.');
+                        notify(t('chat.feedbackThanksTitle'), t('chat.feedbackThanksBody'));
                         setSelectedEvent(null);
                         setMode("map");
                       }}
                     >
                       <Text style={styles.btnPrimaryText}>
-                        Submit & Claim Leaf
+                        {t('chat.submitClaim')}
                       </Text>
                     </TouchableOpacity>
                   </View>
@@ -737,7 +740,7 @@ export const EventChat = (props: any) => {
                 <View style={styles.chatInputRow}>
                   <TextInput
                     style={styles.chatInput}
-                    placeholder="Send a message…"
+                    placeholder={t('chat.messagePlaceholder')}
                     placeholderTextColor={Colors.textPlaceholder}
                     value={chatText}
                     onChangeText={setChatText}

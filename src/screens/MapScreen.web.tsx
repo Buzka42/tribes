@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   ScrollView,
   TextInput,
-  Alert,
   Image,
   Platform,
   ActivityIndicator,
@@ -42,7 +41,8 @@ import {
 import { Feather } from "@expo/vector-icons";
 import { EVENT_CATEGORIES, CategoryGroupId } from "../data/categories";
 import { SPIRIT_ASSETS, SPIRIT_LABELS, renderMoons } from "../utils/assets";
-import { notify } from "../utils/dialogs";
+import { notify, confirmDialog } from "../utils/dialogs";
+import { useI18n } from "../i18n";
 
 import Map, { Marker, Layer, Source, MapMouseEvent } from "react-map-gl/mapbox";
 import mapboxgl from "mapbox-gl";
@@ -78,6 +78,7 @@ export default function MapScreen() {
   } = useTribes();
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const { t, tn, tValue, dateLocale } = useI18n();
 
   const [mode, setMode] = useState<
     | "map"
@@ -518,9 +519,7 @@ export default function MapScreen() {
         !draft.location ||
         !draft.date
       )
-        return window.alert(
-          "Incomplete\n\nMake sure title, category, subcategory, date and location are set.",
-        );
+        return notify(t('wizard.incompleteTitle'), t('wizard.incompleteBody'));
       await createEvent(
         draft.title,
         draft.categoryId,
@@ -531,7 +530,8 @@ export default function MapScreen() {
         {
           latitude: draft.location.lat,
           longitude: draft.location.lng,
-          address: draft.address || "Pinned on the map",
+          // Empty when unset - the chat header translates the fallback at display time
+          address: draft.address || "",
         },
         draft.date,
         draft.ageGroup,
@@ -554,58 +554,39 @@ export default function MapScreen() {
         tribeId: "",
         cyclicalRule: "",
       });
-      notify("Your gathering is live", "5 Leaves were staked. They return when you finalize the event.");
+      notify(t('wizard.liveTitle'), t('wizard.liveBody'));
     } catch (err: any) {
-      notify("Something went wrong", err.message);
+      notify(t('common.error'), err.message);
     }
   };
 
   const handleJoin = async () => {
     if (!liveSelectedEvent || !user) return;
     if (liveSelectedEvent.id === "tutorial-dummy") {
-      if (Platform.OS === "web") {
-        window.alert(
-          "Congratulations! 🌟\n\nYou successfully joined your first event! Since this is a test simulation, your 1 Leaf 🍃 has been instantly refunded. Welcome to The Tribes!",
-        );
-        setSelectedEvent(null);
-        setMode("map");
-        setTutStep(-1);
-        markTutorialSeen();
-      } else {
-        Alert.alert(
-          "Congratulations! 🌟",
-          "You successfully joined your first event! Since this is a test simulation, your 1 Leaf 🍃 has been instantly refunded. Welcome to The Tribes!",
-          [
-            {
-              text: "Awesome!",
-              onPress: () => {
-                setSelectedEvent(null);
-                setMode("map");
-                setTutStep(-1);
-              },
-            },
-          ],
-        );
-      }
+      notify(t('tutorial.congratsTitle'), t('tutorial.congratsBody'));
+      setSelectedEvent(null);
+      setMode("map");
+      setTutStep(-1);
+      markTutorialSeen();
       return;
     }
     if (user.tokens < 1) {
-      window.alert("Out of Leaves\n\nYou need at least 1 Leaf to join. Refunds arrive after past events are finalized.");
+      notify(t('join.outOfLeavesTitle'), t('join.outOfLeavesBody'));
       return;
     }
     if (liveSelectedEvent.participants.includes(user.uid)) {
-      window.alert("You are already signed up for this event.");
+      notify(t('join.alreadyJoinedTitle'), t('join.alreadyJoinedBody'));
       return;
     }
     if (liveSelectedEvent.participants.length >= liveSelectedEvent.participantLimit) {
-      window.alert("This gathering is full\n\nThe circle has reached its limit. Try another fire on the map.");
+      notify(t('join.fullTitle'), t('join.fullBody'));
       return;
     }
     try {
       await joinEvent(liveSelectedEvent.id);
-      window.alert("You're in! Your spot is secured and the chat is unlocked.");
+      notify(t('join.joinedTitle'), t('join.joinedBody'));
     } catch (e: any) {
-      window.alert("Error: " + e.message);
+      notify(t('common.error'), e.message);
     }
   };
 
@@ -722,10 +703,10 @@ export default function MapScreen() {
                     letterSpacing: -0.2,
                   }}
                 >
-                  {isChief ? "Chief Dashboard" : "Council"}
+                  {isChief ? t('tribe.chiefDashboard') : t('tribe.council')}
                 </Text>
                 <Text style={{ fontFamily: Typography.bodyLight, fontSize: 11, color: Colors.textMuted, marginTop: 1 }}>
-                  {isChief ? 'Full command of the tribe' : 'Leader privileges'}
+                  {isChief ? t('tribe.chiefSubtitle') : t('tribe.councilSubtitle')}
                 </Text>
               </View>
             </View>
@@ -759,7 +740,7 @@ export default function MapScreen() {
                       textTransform: 'uppercase',
                     }}
                   >
-                    {liveSelectedTribe.pendingApplicants.length} Pending {liveSelectedTribe.pendingApplicants.length === 1 ? 'Application' : 'Applications'}
+                    {tn('tribe.pendingApplications', liveSelectedTribe.pendingApplicants.length)}
                   </Text>
                 </View>
                 {liveSelectedTribe.pendingApplicants.map((appUid) => (
@@ -785,7 +766,7 @@ export default function MapScreen() {
                           color: Colors.textPrimary,
                         }}
                       >
-                        {liveSelectedTribe.memberNames?.[appUid] || `Wanderer ${appUid.substring(0, 6)}`}
+                        {liveSelectedTribe.memberNames?.[appUid] || t('tribe.wanderer', { id: appUid.substring(0, 6) })}
                       </Text>
                     </TouchableOpacity>
                     <View style={{ flexDirection: "row", gap: 8 }}>
@@ -793,9 +774,9 @@ export default function MapScreen() {
                         onPress={async () => {
                           try {
                             await rejectApplicant(liveSelectedTribe.id, appUid);
-                            if (typeof window !== 'undefined') window.alert("Application rejected.");
+                            if (typeof window !== 'undefined') notify(t('tribe.rejected'));
                           } catch (e) {
-                            if (typeof window !== 'undefined') window.alert("Failed to reject application.");
+                            if (typeof window !== 'undefined') notify(t('tribe.rejectFailed'));
                           }
                         }}
                         style={{
@@ -814,16 +795,16 @@ export default function MapScreen() {
                             fontSize: 12,
                           }}
                         >
-                          Reject
+                          {t('tribe.reject')}
                         </Text>
                       </TouchableOpacity>
                       <TouchableOpacity
                         onPress={async () => {
                           try {
                             await acceptApplicant(liveSelectedTribe.id, appUid);
-                            if (typeof window !== 'undefined') window.alert("Initiated into the tribe.");
+                            if (typeof window !== 'undefined') notify(t('tribe.accepted'));
                           } catch (e) {
-                            if (typeof window !== 'undefined') window.alert("Failed to accept applicant.");
+                            if (typeof window !== 'undefined') notify(t('tribe.acceptFailed'));
                           }
                         }}
                         style={{
@@ -842,7 +823,7 @@ export default function MapScreen() {
                             fontSize: 12,
                           }}
                         >
-                          Accept
+                          {t('tribe.accept')}
                         </Text>
                       </TouchableOpacity>
                     </View>
@@ -871,7 +852,7 @@ export default function MapScreen() {
                     textTransform: 'uppercase',
                   }}
                 >
-                  Broadcast Signal
+                  {t('tribe.broadcast')}
                 </Text>
               </View>
               <TextInput
@@ -887,7 +868,7 @@ export default function MapScreen() {
                   borderWidth: 1,
                   borderColor: "rgba(255,255,255,0.1)",
                 }}
-                placeholder="Write an announcement to your tribe…"
+                placeholder={t('tribe.announcementPlaceholder')}
                 placeholderTextColor="rgba(255,255,255,0.28)"
                 multiline
                 value={announcementText}
@@ -918,7 +899,7 @@ export default function MapScreen() {
                     fontSize: 14,
                   }}
                 >
-                  Send Announcement
+                  {t('tribe.sendAnnouncement')}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -933,7 +914,7 @@ export default function MapScreen() {
                   textTransform: 'uppercase',
                 }}
               >
-                Members ({liveSelectedTribe.members.length})
+                {t('tribe.membersHeader', { n: liveSelectedTribe.members.length })}
               </Text>
             </View>
             <View
@@ -1009,11 +990,11 @@ export default function MapScreen() {
                       </TouchableOpacity>
                       {mIsChief ? (
                         <Text style={{ fontFamily: Typography.bodyLight, fontSize: 10, color: Colors.gold, letterSpacing: 0.8 }}>
-                          Chief
+                          {t('tribe.chief')}
                         </Text>
                       ) : mIsLeader ? (
                         <Text style={{ fontFamily: Typography.bodyLight, fontSize: 10, color: '#7A8FA0', letterSpacing: 0.8 }}>
-                          Leader
+                          {t('tribe.leader')}
                         </Text>
                       ) : null}
                     </View>
@@ -1040,12 +1021,12 @@ export default function MapScreen() {
                       {!mIsChief && (isChief || (isLeader && !mIsLeader)) && (
                         <TouchableOpacity
                           onPress={() => {
-                            if (
-                              window.confirm(
-                                `Remove ${liveSelectedTribe.memberNames[mUid]}?`,
-                              )
-                            )
-                              removeMember(liveSelectedTribe.id, mUid);
+                            confirmDialog(
+                              t('tribe.removeTitle'),
+                              t('tribe.removeConfirm', { name: liveSelectedTribe.memberNames[mUid] || '?' }),
+                              t('tribe.removeAction'),
+                              true,
+                            ).then((ok: boolean) => { if (ok) removeMember(liveSelectedTribe.id, mUid); });
                           }}
                           style={{ padding: 7 }}
                         >
@@ -1064,13 +1045,18 @@ export default function MapScreen() {
             {isChief && (
               <TouchableOpacity
                 onPress={() => {
-                  if (
-                    window.confirm("DANGER: Permanently dissolve the tribe?")
-                  ) {
-                    deleteTribe(liveSelectedTribe.id);
-                    setSelectedTribe(null);
-                    setShowManagement(false);
-                  }
+                  confirmDialog(
+                    t('tribe.dissolveTitle'),
+                    t('tribe.dissolveConfirm'),
+                    t('tribe.dissolveAction'),
+                    true,
+                  ).then((ok: boolean) => {
+                    if (ok) {
+                      deleteTribe(liveSelectedTribe.id);
+                      setSelectedTribe(null);
+                      setShowManagement(false);
+                    }
+                  });
                 }}
                 style={{
                   backgroundColor: Colors.dangerSoft,
@@ -1090,7 +1076,7 @@ export default function MapScreen() {
                       color: Colors.danger,
                     }}
                   >
-                    Dissolve Tribe
+                    {t('tribe.dissolveTitle')}
                   </Text>
                 </View>
               </TouchableOpacity>
@@ -1296,7 +1282,7 @@ export default function MapScreen() {
                       dateFilter === d && styles.datePillTextActive,
                     ]}
                   >
-                    {d}
+                    {t(`map.dateFilters.${d}`)}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -1347,7 +1333,7 @@ export default function MapScreen() {
                     0 && { color: '#1A2421' },
                 ]}
               >
-                Filters{" "}
+                {t('map.filters')}{" "}
                 {Object.keys(activeFilters).length +
                   activeAgeFilters.length +
                   activeGenderFilters.length >
@@ -1395,9 +1381,7 @@ export default function MapScreen() {
                   color: Colors.textSecondary,
                 }}
               >
-                {hasNarrowingFilters
-                  ? "No gatherings match your filters."
-                  : "The land is quiet. Light the first fire."}
+                {hasNarrowingFilters ? t('map.emptyFiltered') : t('map.emptyQuiet')}
               </Text>
               {hasNarrowingFilters && (
                 <TouchableOpacity onPress={clearAllFilters}>
@@ -1408,7 +1392,7 @@ export default function MapScreen() {
                       color: Colors.gold,
                     }}
                   >
-                    Show all
+                    {t('map.showAll')}
                   </Text>
                 </TouchableOpacity>
               )}
@@ -1447,7 +1431,7 @@ export default function MapScreen() {
                   marginRight: 10,
                 },
               ]}
-              placeholder="Search city, neighborhood..."
+              placeholder={t('map.searchPlaceholder')}
               placeholderTextColor={Colors.textPlaceholder}
               autoFocus
               value={wizardQuery}
@@ -1510,10 +1494,10 @@ export default function MapScreen() {
   const renderWizardDetails = () => (
     <View style={styles.glassWrapperBottom}>
       <BlurView intensity={85} tint="dark" style={styles.glassPanelBottom}>
-        <Text style={styles.panelTitle}>Design your tribe's event</Text>
+        <Text style={styles.panelTitle}>{t('wizard.title')}</Text>
         <TextInput
           style={styles.input}
-          placeholder="Title (e.g. Morning Run)"
+          placeholder={t('wizard.titlePlaceholder')}
           placeholderTextColor={Colors.textPlaceholder}
           value={draft.title}
           onChangeText={(t) => setDraft({ ...draft, title: t })}
@@ -1553,7 +1537,7 @@ export default function MapScreen() {
                   draft.categoryId === cat.id && { color: "#fff" },
                 ]}
               >
-                {cat.label}
+                {tValue('categories', cat.id)}
               </Text>
             </TouchableOpacity>
           ))}
@@ -1591,13 +1575,7 @@ export default function MapScreen() {
                       if (subs.length < 5) {
                         setDraft({ ...draft, categorySub: [...subs, sub] });
                       } else {
-                        if (Platform.OS === "web")
-                          window.alert("You can select up to 5 subcategories.");
-                        else
-                          Alert.alert(
-                            "Limit Reached",
-                            "You can select up to 5 subcategories.",
-                          );
+                        notify(t('wizard.maxSubcategories'));
                       }
                     }
                   }}
@@ -1608,7 +1586,7 @@ export default function MapScreen() {
                       isActive && { color: "#fff" },
                     ]}
                   >
-                    {sub}
+                    {tValue('subgroups', sub)}
                   </Text>
                 </TouchableOpacity>
               );
@@ -1626,7 +1604,7 @@ export default function MapScreen() {
             marginLeft: "4%",
           }}
         >
-          Target Age Group (Optional)
+          {t('wizard.ageGroup')}
         </Text>
         <ScrollView
           horizontal
@@ -1652,7 +1630,7 @@ export default function MapScreen() {
                     draft.ageGroup === age && { color: Colors.gold },
                   ]}
                 >
-                  {age}
+                  {tValue('ages', age)}
                 </Text>
               </TouchableOpacity>
             ),
@@ -1669,7 +1647,7 @@ export default function MapScreen() {
             marginLeft: "4%",
           }}
         >
-          Target Gender (Optional)
+          {t('wizard.gender')}
         </Text>
         <ScrollView
           horizontal
@@ -1694,7 +1672,7 @@ export default function MapScreen() {
                   draft.gender === gender && { color: Colors.gold },
                 ]}
               >
-                {gender}
+                {tValue('genders', gender)}
               </Text>
             </TouchableOpacity>
           ))}
@@ -1724,7 +1702,7 @@ export default function MapScreen() {
 
         <TextInput
           style={styles.input}
-          placeholder="Location Base (City/Street)"
+          placeholder={t('wizard.locationPlaceholder')}
           placeholderTextColor={Colors.textPlaceholder}
           value={wizardQuery}
           onChangeText={searchWizardLocation}
@@ -1751,7 +1729,7 @@ export default function MapScreen() {
           </View>
         )}
 
-        <Text style={styles.panelTitle}>Frequency</Text>
+        <Text style={styles.panelTitle}>{t('wizard.frequency')}</Text>
         <Text
           style={{
             fontFamily: Typography.body,
@@ -1760,7 +1738,7 @@ export default function MapScreen() {
             marginTop: -15,
           }}
         >
-          Should this gathering happen regularly?
+          {t('wizard.frequencyHint')}
         </Text>
         <ScrollView
           horizontal
@@ -1794,9 +1772,7 @@ export default function MapScreen() {
                   },
                 ]}
               >
-                {rule === "once"
-                  ? "One-time"
-                  : rule.charAt(0).toUpperCase() + rule.slice(1)}
+                {rule === "once" ? t('wizard.once') : rule === "weekly" ? t('wizard.weekly') : t('wizard.monthly')}
               </Text>
             </TouchableOpacity>
           ))}
@@ -1813,7 +1789,7 @@ export default function MapScreen() {
             marginLeft: "4%",
           }}
         >
-          Visibility
+          {t('wizard.visibility')}
         </Text>
         <View style={{ flexDirection: "row", gap: 10, marginBottom: 20, paddingHorizontal: "4%" }}>
           <TouchableOpacity
@@ -1825,7 +1801,7 @@ export default function MapScreen() {
             onPress={() => setDraft({ ...draft, isPrivate: false })}
           >
             <Feather name="globe" size={13} color={!draft.isPrivate ? Colors.gold : Colors.textSecondary} />
-            <Text style={[styles.wizardSubCatText, !draft.isPrivate && { color: Colors.gold }]}>Public</Text>
+            <Text style={[styles.wizardSubCatText, !draft.isPrivate && { color: Colors.gold }]}>{t('wizard.public')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[
@@ -1836,7 +1812,7 @@ export default function MapScreen() {
             onPress={() => setDraft({ ...draft, isPrivate: true })}
           >
             <Feather name="lock" size={13} color={draft.isPrivate ? Colors.gold : Colors.textSecondary} />
-            <Text style={[styles.wizardSubCatText, draft.isPrivate && { color: Colors.gold }]}>Private · Invite Only</Text>
+            <Text style={[styles.wizardSubCatText, draft.isPrivate && { color: Colors.gold }]}>{t('wizard.private')}</Text>
           </TouchableOpacity>
         </View>
 
@@ -1845,7 +1821,7 @@ export default function MapScreen() {
             style={styles.btnSecondary}
             onPress={() => setMode("map")}
           >
-            <Text style={styles.btnSecondaryText}>Cancel</Text>
+            <Text style={styles.btnSecondaryText}>{t('common.cancel')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.btnPrimary}
@@ -1858,7 +1834,7 @@ export default function MapScreen() {
               setMode("wizard_location");
             }}
           >
-            <Text style={styles.btnPrimaryText}>Set Location</Text>
+            <Text style={styles.btnPrimaryText}>{t('wizard.setLocation')}</Text>
           </TouchableOpacity>
         </View>
       </BlurView>
@@ -1868,9 +1844,9 @@ export default function MapScreen() {
   const renderWizardLocation = () => (
     <View style={styles.glassWrapperTop}>
       <BlurView intensity={90} tint="dark" style={styles.glassPanelTop}>
-        <Text style={styles.panelTitleDark}>Drop the exact pin</Text>
+        <Text style={styles.panelTitleDark}>{t('wizard.dropPin')}</Text>
         <Text style={styles.panelSubDark}>
-          Tap anywhere on the map to anchor coordinates.
+          {t('wizard.dropPinHint')}
         </Text>
         {draft.location && (
           <View style={styles.row}>
@@ -1878,17 +1854,17 @@ export default function MapScreen() {
               style={styles.btnSecondary}
               onPress={() => setMode("wizard_details")}
             >
-              <Text style={styles.btnSecondaryTextDark}>Back</Text>
+              <Text style={styles.btnSecondaryTextDark}>{t('common.back')}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.btnPrimary} onPress={handleCreate}>
               <Text style={styles.btnPrimaryText}>
-                Lock 5{" "}
+                {t('wizard.stakePrefix')}{" "}
                 <Image
                   source={require("../assets/leaf.png")}
                   style={styles.inlineIcon}
                   tintColor="#fff"
                 />{" "}
-                & Finalize
+                {t('wizard.stakeSuffix')}
               </Text>
             </TouchableOpacity>
           </View>
@@ -1911,7 +1887,7 @@ export default function MapScreen() {
             marginBottom: 5,
           }}
         >
-          <Text style={styles.panelTitle}>Filter Events</Text>
+          <Text style={styles.panelTitle}>{t('filters.title')}</Text>
           <TouchableOpacity
             onPress={() => setMode("map")}
             style={{ padding: 5 }}
@@ -1926,7 +1902,7 @@ export default function MapScreen() {
             marginBottom: 15,
           }}
         >
-          Select categories to show on map. Deselect all to view everything.
+          {t('filters.subtitle')}
         </Text>
         <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
           {EVENT_CATEGORIES.map((cat) => {
@@ -1959,7 +1935,7 @@ export default function MapScreen() {
                           : { color: Colors.text },
                       ]}
                     >
-                      {cat.label}{" "}
+                      {tValue('categories', cat.id)}{" "}
                       {isCatActive && activeFilters[cat.id].length > 0
                         ? `(${activeFilters[cat.id].length})`
                         : ""}
@@ -2018,7 +1994,7 @@ export default function MapScreen() {
                               isSubActive && { color: "#fff" },
                             ]}
                           >
-                            {sub}
+                            {tValue('subgroups', sub)}
                           </Text>
                         </TouchableOpacity>
                       );
@@ -2058,7 +2034,7 @@ export default function MapScreen() {
                       : { color: Colors.text },
                   ]}
                 >
-                  Age Group{" "}
+                  {t('filters.ageGroup')}{" "}
                   {activeAgeFilters.length > 0
                     ? `(${activeAgeFilters.length})`
                     : ""}
@@ -2118,7 +2094,7 @@ export default function MapScreen() {
                             isSubActive && { color: "#fff" },
                           ]}
                         >
-                          {age}
+                          {tValue('ages', age)}
                         </Text>
                       </TouchableOpacity>
                     );
@@ -2158,7 +2134,7 @@ export default function MapScreen() {
                       : { color: Colors.text },
                   ]}
                 >
-                  Target Gender{" "}
+                  {t('filters.gender')}{" "}
                   {activeGenderFilters.length > 0
                     ? `(${activeGenderFilters.length})`
                     : ""}
@@ -2221,7 +2197,7 @@ export default function MapScreen() {
                           isSubActive && { color: "#fff" },
                         ]}
                       >
-                        {gender}
+                        {tValue('genders', gender)}
                       </Text>
                     </TouchableOpacity>
                   );
@@ -2258,7 +2234,7 @@ export default function MapScreen() {
                 marginBottom: 15,
               }}
             >
-              Welcome to The Tribes
+              {t('tutorial.welcomeTitle')}
             </Text>
             <Text
               style={{
@@ -2271,14 +2247,13 @@ export default function MapScreen() {
                 lineHeight: 24,
               }}
             >
-              Discover local events, meet new people, and assemble your tribe.
-              Let's take a quick tour!
+              {t('tutorial.welcomeBody')}
             </Text>
             <TouchableOpacity
               style={styles.btnPrimary}
               onPress={() => setTutStep(1)}
             >
-              <Text style={styles.btnPrimaryText}>Start Tour</Text>
+              <Text style={styles.btnPrimaryText}>{t('tutorial.startTour')}</Text>
             </TouchableOpacity>
           </View>
         );
@@ -2321,7 +2296,7 @@ export default function MapScreen() {
                   marginBottom: 10,
                 }}
               >
-                1. Your Leaves
+                {t('tutorial.s1Title')}
               </Text>
               <Text
                 style={{
@@ -2330,8 +2305,7 @@ export default function MapScreen() {
                   marginBottom: 15,
                 }}
               >
-                Leaves are your currency. Use them to join and create events.
-                You get 5 free every day!
+                {t('tutorial.s1Body')}
               </Text>
               <TouchableOpacity
                 style={[
@@ -2340,7 +2314,7 @@ export default function MapScreen() {
                 ]}
                 onPress={() => setTutStep(2)}
               >
-                <Text style={styles.btnPrimaryText}>Next</Text>
+                <Text style={styles.btnPrimaryText}>{t('common.next')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -2384,7 +2358,7 @@ export default function MapScreen() {
                   marginBottom: 10,
                 }}
               >
-                2. Settings
+                {t('tutorial.s2Title')}
               </Text>
               <Text
                 style={{
@@ -2393,8 +2367,7 @@ export default function MapScreen() {
                   marginBottom: 15,
                 }}
               >
-                Tap here to update your profile, tags, and adjust app
-                preferences.
+                {t('tutorial.s2Body')}
               </Text>
               <TouchableOpacity
                 style={[
@@ -2403,7 +2376,7 @@ export default function MapScreen() {
                 ]}
                 onPress={() => setTutStep(3)}
               >
-                <Text style={styles.btnPrimaryText}>Next</Text>
+                <Text style={styles.btnPrimaryText}>{t('common.next')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -2447,7 +2420,7 @@ export default function MapScreen() {
                   marginBottom: 10,
                 }}
               >
-                3. Global Navigation
+                {t('tutorial.s3Title')}
               </Text>
               <Text
                 style={{
@@ -2456,8 +2429,7 @@ export default function MapScreen() {
                   marginBottom: 15,
                 }}
               >
-                Center the map to your home or search to instantly fly to any
-                location worldwide.
+                {t('tutorial.s3Body')}
               </Text>
               <TouchableOpacity
                 style={[
@@ -2466,7 +2438,7 @@ export default function MapScreen() {
                 ]}
                 onPress={() => setTutStep(4)}
               >
-                <Text style={styles.btnPrimaryText}>Next</Text>
+                <Text style={styles.btnPrimaryText}>{t('common.next')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -2510,7 +2482,7 @@ export default function MapScreen() {
                   marginBottom: 10,
                 }}
               >
-                4. Find Your Vibe
+                {t('tutorial.s4Title')}
               </Text>
               <Text
                 style={{
@@ -2519,8 +2491,7 @@ export default function MapScreen() {
                   marginBottom: 15,
                 }}
               >
-                Use filters to discover specific events based on category, age,
-                or gender.
+                {t('tutorial.s4Body')}
               </Text>
               <TouchableOpacity
                 style={[
@@ -2529,7 +2500,7 @@ export default function MapScreen() {
                 ]}
                 onPress={() => setTutStep(5)}
               >
-                <Text style={styles.btnPrimaryText}>Next</Text>
+                <Text style={styles.btnPrimaryText}>{t('common.next')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -2563,7 +2534,7 @@ export default function MapScreen() {
             <Text
               style={{ fontFamily: Typography.bodySemibold, color: Colors.textPrimary, marginBottom: 10 }}
             >
-              5. Create an Event
+              {t('tutorial.s5Title')}
             </Text>
             <Text
               style={{
@@ -2572,8 +2543,7 @@ export default function MapScreen() {
                 marginBottom: 15,
               }}
             >
-              Ready to host? Tap the + icon to assemble a tribe right at the
-              map's center crosshair!
+              {t('tutorial.s5Body')}
             </Text>
             <TouchableOpacity
               style={[
@@ -2582,7 +2552,7 @@ export default function MapScreen() {
               ]}
               onPress={() => setTutStep(6)}
             >
-              <Text style={styles.btnPrimaryText}>Next</Text>
+              <Text style={styles.btnPrimaryText}>{t('common.next')}</Text>
             </TouchableOpacity>
           </View>
         );
@@ -2610,7 +2580,7 @@ export default function MapScreen() {
             <Text
               style={{ fontFamily: Typography.bodySemibold, color: Colors.textPrimary, marginBottom: 10 }}
             >
-              6. Tribal Fires
+              {t('tutorial.s6Title')}
             </Text>
             <Text
               style={{
@@ -2619,8 +2589,7 @@ export default function MapScreen() {
                 marginBottom: 10,
               }}
             >
-              Active events show up as pins. Let's practice! Tap the test pin
-              exactly at the center of the map.
+              {t('tutorial.s6Body')}
             </Text>
             <TouchableOpacity
               onPress={() => markTutorialSeen()}
@@ -2636,7 +2605,7 @@ export default function MapScreen() {
                   fontFamily: Typography.bodyBold,
                 }}
               >
-                Skip Tutorial
+                {t('tutorial.skip')}
               </Text>
             </TouchableOpacity>
             <Feather
@@ -2672,7 +2641,7 @@ export default function MapScreen() {
             <Text
               style={{ fontFamily: Typography.bodySemibold, color: Colors.textPrimary, marginBottom: 10 }}
             >
-              7. Joining a Tribe
+              {t('tutorial.s7Title')}
             </Text>
             <Text
               style={{
@@ -2681,9 +2650,7 @@ export default function MapScreen() {
                 marginBottom: 15,
               }}
             >
-              This is a locked Tribal Chat. It stays secure until you commit 1
-              Leaf to join the event. Go ahead, tap the "Join Tribe" button
-              below!
+              {t('tutorial.s7Body')}
             </Text>
             <Feather
               name="arrow-down"
@@ -2846,7 +2813,7 @@ export default function MapScreen() {
                   (c) => c.id === ev.categoryId,
                 );
                 const timeStr = ev.time
-                  ? format(new Date(ev.time), "MMM d, HH:mm")
+                  ? format(new Date(ev.time), t('dates.clusterTime'), { locale: dateLocale })
                   : "";
                 return (
                   <div

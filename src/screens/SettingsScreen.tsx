@@ -7,6 +7,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../hooks/useAuth';
+import { useI18n, LanguagePreference } from '../i18n';
 import { Colors, Typography } from '../theme';
 import { Feather } from '@expo/vector-icons';
 import { RootStackParamList } from '../navigation/AppNavigator';
@@ -17,6 +18,7 @@ export default function SettingsScreen() {
   const { user } = useAuth();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const insets = useSafeAreaInsets();
+  const { t, preference, setPreference } = useI18n();
 
   const [displayName, setDisplayName] = useState(user?.displayName || '');
   const [dateOfBirth, setDateOfBirth] = useState(user?.dateOfBirth || '');
@@ -70,7 +72,7 @@ export default function SettingsScreen() {
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
           <Feather name="arrow-left" size={22} color={Colors.textSecondary} />
         </TouchableOpacity>
-        <Text style={styles.title}>Settings</Text>
+        <Text style={styles.title}>{t('settings.title')}</Text>
         <View style={{ width: 42 }} />
       </View>
 
@@ -80,59 +82,61 @@ export default function SettingsScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Display Name */}
-        <Text style={styles.fieldLabel}>DISPLAY NAME</Text>
+        <Text style={styles.fieldLabel}>{t('setup.displayName')}</Text>
         <TextInput
           style={styles.input}
           value={displayName}
           onChangeText={setDisplayName}
-          placeholder="Your name"
+          placeholder={t('settings.namePlaceholder')}
           placeholderTextColor={Colors.textPlaceholder}
         />
 
         {/* Date of Birth */}
-        <Text style={styles.fieldLabel}>DATE OF BIRTH</Text>
+        <Text style={styles.fieldLabel}>{t('setup.dateOfBirth')}</Text>
         <TextInput
           style={styles.input}
           value={dateOfBirth}
           onChangeText={setDateOfBirth}
-          placeholder="YYYY-MM-DD"
+          placeholder={t('setup.dateOfBirthPlaceholder')}
           placeholderTextColor={Colors.textPlaceholder}
         />
 
-        {/* Sex */}
-        <Text style={styles.fieldLabel}>IDENTITY</Text>
+        {/* Sex — stored as English values, displayed translated */}
+        <Text style={styles.fieldLabel}>{t('setup.identity')}</Text>
         <View style={styles.chipRow}>
-          {['Male', 'Female', 'Other'].map(s => (
+          {(['Male', 'Female', 'Other'] as const).map(s => (
             <TouchableOpacity
               key={s}
               onPress={() => setSex(s)}
               style={[styles.chip, sex === s && styles.chipActive]}
               activeOpacity={0.75}
             >
-              <Text style={[styles.chipText, sex === s && styles.chipTextActive]}>{s}</Text>
+              <Text style={[styles.chipText, sex === s && styles.chipTextActive]}>
+                {{ Male: t('setup.male'), Female: t('setup.female'), Other: t('setup.other') }[s]}
+              </Text>
             </TouchableOpacity>
           ))}
         </View>
 
         {/* Bio */}
-        <Text style={styles.fieldLabel}>SHORT BIO</Text>
+        <Text style={styles.fieldLabel}>{t('setup.shortBio')}</Text>
         <TextInput
           style={[styles.input, styles.inputMulti]}
           value={description}
           onChangeText={setDescription}
-          placeholder="What drives you? (Max 250 chars)"
+          placeholder={t('settings.bioPlaceholder')}
           placeholderTextColor={Colors.textPlaceholder}
           multiline
           maxLength={250}
         />
 
         {/* Home Location */}
-        <Text style={styles.fieldLabel}>HOME LOCATION</Text>
+        <Text style={styles.fieldLabel}>{t('settings.homeLocation')}</Text>
         <TextInput
           style={styles.input}
           value={locationInput}
           onChangeText={searchLocation}
-          placeholder="City or street address"
+          placeholder={t('setup.homeBasePlaceholder')}
           placeholderTextColor={Colors.textPlaceholder}
         />
         {suggestions.length > 0 && (
@@ -154,6 +158,28 @@ export default function SettingsScreen() {
           </View>
         )}
 
+        {/* Language */}
+        <Text style={styles.fieldLabel}>{t('settings.language')}</Text>
+        <View style={styles.chipRow}>
+          {([
+            { value: 'auto', label: t('settings.languageAuto') },
+            { value: 'en', label: 'English' },
+            { value: 'pl', label: 'Polski' },
+          ] as { value: LanguagePreference; label: string }[]).map(opt => (
+            <TouchableOpacity
+              key={opt.value}
+              onPress={() => setPreference(opt.value)}
+              style={[styles.chip, preference === opt.value && styles.chipActive]}
+              activeOpacity={0.75}
+            >
+              <Text style={[styles.chipText, preference === opt.value && styles.chipTextActive]}>
+                {opt.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        <Text style={styles.languageHint}>{t('settings.languageHint')}</Text>
+
         {/* Divider before save */}
         <View style={styles.hairline} />
 
@@ -165,13 +191,13 @@ export default function SettingsScreen() {
           activeOpacity={0.82}
         >
           <Text style={styles.btnPrimaryText}>
-            {loading ? 'Saving…' : 'Save Profile'}
+            {loading ? t('settings.saving') : t('settings.saveProfile')}
           </Text>
         </TouchableOpacity>
 
         {/* Map attribution (required by Mapbox ToS) */}
         <View style={[styles.hairline, { marginTop: 32, marginBottom: 0 }]} />
-        <Text style={[styles.fieldLabel, { marginTop: 20, marginBottom: 10 }]}>MAP DATA</Text>
+        <Text style={[styles.fieldLabel, { marginTop: 20, marginBottom: 10 }]}>{t('settings.mapData')}</Text>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 4, marginBottom: 8 }}>
           <TouchableOpacity onPress={() => Linking.openURL('https://www.mapbox.com/about/maps/')} activeOpacity={0.7}>
             <Text style={styles.attributionLink}>© Mapbox</Text>
@@ -182,7 +208,7 @@ export default function SettingsScreen() {
           </TouchableOpacity>
           <Text style={styles.attributionSep}>·</Text>
           <TouchableOpacity onPress={() => Linking.openURL('https://apps.mapbox.com/feedback/')} activeOpacity={0.7}>
-            <Text style={styles.attributionLink}>Improve this map</Text>
+            <Text style={styles.attributionLink}>{t('settings.improveMap')}</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -305,6 +331,16 @@ const styles = StyleSheet.create({
   },
   chipTextActive: {
     color: Colors.gold,
+  },
+
+  // ── Language ──────────────────────────────────────────────────────────────
+  languageHint: {
+    fontFamily: Typography.bodyLight,
+    fontSize: 12,
+    color: Colors.textMuted,
+    marginTop: -16,
+    marginBottom: 26,
+    lineHeight: 17,
   },
 
   // ── Divider ───────────────────────────────────────────────────────────────

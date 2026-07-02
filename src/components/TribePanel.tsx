@@ -1,16 +1,19 @@
 import { format } from 'date-fns';
 import React, { useState } from 'react';
 import { styles } from './MapStyles';
-import { View, Text, Image, TouchableOpacity, StyleSheet, TextInput, ScrollView, Platform, Alert, Share } from 'react-native';
+import { View, Text, Image, TouchableOpacity, StyleSheet, TextInput, ScrollView, Platform, Share } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { Feather, Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Typography } from '../theme';
 import { SPIRIT_ASSETS, renderMoons } from '../utils/assets';
+import { notify, confirmDialog } from '../utils/dialogs';
+import { useI18n } from '../i18n';
 
 export const TribePanel = (props: any) => {
   const { selectedTribe, setSelectedTribe, user, applyToTribe, leaveTribe, showManagement, setShowManagement, announcementText, setAnnouncementText, postAnnouncement, acceptApplicant, rejectApplicant, removeMember, deleteTribe, updateTribe, promoteMember, demoteMember, events, setMode, setSelectedEvent, setDraft, draft, setProfileViewUid, renderManagementOverlay } = props;
   const insets = useSafeAreaInsets();
+  const { t, tn, dateLocale } = useI18n();
 
     if (!selectedTribe) return null;
     const isChief = selectedTribe.creatorId === user?.uid;
@@ -157,7 +160,7 @@ export const TribePanel = (props: any) => {
                   textTransform: 'uppercase',
                 }}
               >
-                {selectedTribe.members.length} Tribesmen
+                {tn('tribe.members', selectedTribe.members.length)}
               </Text>
             </View>
             <Text
@@ -190,15 +193,11 @@ export const TribePanel = (props: any) => {
               }}
               onPress={async () => {
                 await applyToTribe(selectedTribe.id);
-                if (Platform.OS === 'web') {
-                  if (typeof window !== 'undefined') window.alert("Your smoke signal was sent to the chief!");
-                } else {
-                  Alert.alert('', 'Your smoke signal was sent to the chief!');
-                }
+                notify(t('tribe.applied'));
               }}
             >
               <Text style={{ fontFamily: Typography.bodyBold, color: Colors.textPrimary, fontSize: 15, letterSpacing: 0.2 }}>
-                Apply to Join
+                {t('tribe.apply')}
               </Text>
             </TouchableOpacity>
           )}
@@ -219,7 +218,7 @@ export const TribePanel = (props: any) => {
                   fontSize: 15,
                 }}
               >
-                Application Pending…
+                {t('tribe.pending')}
               </Text>
             </View>
           )}
@@ -242,15 +241,15 @@ export const TribePanel = (props: any) => {
                   try {
                     const l = `${window.location.origin}/?invite=${selectedTribe.id}`;
                     await navigator.clipboard.writeText(l);
-                    if (typeof window !== 'undefined') window.alert("Invite link copied to clipboard!");
+                    notify(t('tribe.inviteCopied'));
                   } catch {
-                    if (typeof window !== 'undefined') window.alert("Failed to copy link");
+                    notify(t('tribe.inviteCopyFailed'));
                   }
                 } else {
                   try {
                     await Share.share({
-                      message: `Join my tribe "${selectedTribe.name}" on Tribes! Code: ${selectedTribe.id}`,
-                      title: `Join ${selectedTribe.name}`,
+                      message: t('tribe.inviteShare', { name: selectedTribe.name, id: selectedTribe.id }),
+                      title: selectedTribe.name,
                     });
                   } catch { /* user dismissed share sheet */ }
                 }
@@ -258,7 +257,7 @@ export const TribePanel = (props: any) => {
             >
               <Feather name="link" size={16} color={Colors.textPrimary} />
               <Text style={{ fontFamily: Typography.bodyBold, color: Colors.textPrimary, fontSize: 15, letterSpacing: 0.2 }}>
-                Copy Invite Link
+                {t('tribe.copyInvite')}
               </Text>
             </TouchableOpacity>
           )}
@@ -274,22 +273,16 @@ export const TribePanel = (props: any) => {
                 borderWidth: 1,
                 borderColor: Colors.dangerBorder,
               }}
-              onPress={() =>
-                Alert.alert("Leave Tribe", "Are you sure?", [
-                  { text: "Cancel", style: "cancel" },
-                  {
-                    text: "Leave",
-                    style: "destructive",
-                    onPress: async () => {
-                      await leaveTribe(selectedTribe.id);
-                      setSelectedTribe(null);
-                    },
-                  },
-                ])
-              }
+              onPress={async () => {
+                const ok = await confirmDialog(t('tribe.leave'), t('tribe.leaveConfirm'), t('tribe.leaveAction'), true);
+                if (ok) {
+                  await leaveTribe(selectedTribe.id);
+                  setSelectedTribe(null);
+                }
+              }}
             >
               <Text style={{ fontFamily: Typography.bodyBold, color: Colors.danger, fontSize: 15 }}>
-                Leave Tribe
+                {t('tribe.leave')}
               </Text>
             </TouchableOpacity>
           )}
@@ -306,7 +299,7 @@ export const TribePanel = (props: any) => {
                 letterSpacing: 0.2,
               }}
             >
-              Campfire
+              {t('tribe.campfire')}
             </Text>
           </View>
           {selectedTribe.announcements.length === 0 ? (
@@ -320,7 +313,7 @@ export const TribePanel = (props: any) => {
                   fontSize: 13,
                 }}
               >
-                No signals from the fire yet.
+                {t('tribe.noAnnouncements')}
               </Text>
             </View>
           ) : (
@@ -375,7 +368,7 @@ export const TribePanel = (props: any) => {
                       <Text
                         style={{ fontSize: 11, color: "rgba(255,255,255,0.3)" }}
                       >
-                        {format(ann.createdAt, "MMM d, HH:mm")}
+                        {format(ann.createdAt, t('dates.announcement'), { locale: dateLocale })}
                       </Text>
                     </View>
                   </View>
@@ -406,7 +399,7 @@ export const TribePanel = (props: any) => {
                   letterSpacing: 0.2,
                 }}
               >
-                Gatherings
+                {t('tribe.gatherings')}
               </Text>
             </View>
             {isLeader && (
@@ -436,7 +429,7 @@ export const TribePanel = (props: any) => {
                     letterSpacing: 0.2,
                   }}
                 >
-                  + New
+                  {t('tribe.newGathering')}
                 </Text>
               </TouchableOpacity>
             )}
@@ -452,7 +445,7 @@ export const TribePanel = (props: any) => {
                   fontSize: 13,
                 }}
               >
-                The land is still. No gatherings planned.
+                {t('tribe.noGatherings')}
               </Text>
             </View>
           ) : (
@@ -508,7 +501,7 @@ export const TribePanel = (props: any) => {
                           letterSpacing: 0.8,
                         }}
                       >
-                        {e.cyclicalRule.toUpperCase()}
+                        {e.cyclicalRule === 'weekly' ? t('tribe.weekly') : t('tribe.monthly')}
                       </Text>
                     </View>
                   )}
@@ -532,7 +525,7 @@ export const TribePanel = (props: any) => {
                           letterSpacing: 0.8,
                         }}
                       >
-                        DONE
+                        {t('tribe.done')}
                       </Text>
                     </View>
                   )}
@@ -545,7 +538,7 @@ export const TribePanel = (props: any) => {
                     fontSize: 12,
                   }}
                 >
-                  {format(e.time, "EEEE, MMM d · h:mm a")}
+                  {format(e.time, t('dates.eventTimeLong'), { locale: dateLocale })}
                 </Text>
               </TouchableOpacity>
             ))

@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import {
   View, StyleSheet, Text, TouchableOpacity, ScrollView,
-  TextInput, Alert, Platform, Image, KeyboardAvoidingView, Share,
+  TextInput, Platform, Image, KeyboardAvoidingView,
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useNavigation } from '@react-navigation/native';
@@ -23,7 +23,8 @@ import { CreateTribeWizard } from '../components/CreateTribeWizard';
 import { ProfileModal } from '../components/ProfileModal';
 import { format, isToday, isTomorrow, isWeekend, addDays, startOfWeek, endOfWeek, addWeeks } from 'date-fns';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { notify } from '../utils/dialogs';
+import { notify, confirmDialog } from '../utils/dialogs';
+import { useI18n } from '../i18n';
 import { Feather } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { EVENT_CATEGORIES, CategoryGroupId } from '../data/categories';
@@ -39,6 +40,7 @@ export default function MapScreen() {
   const { tribes, createTribe, applyToTribe, acceptApplicant, rejectApplicant, postAnnouncement, leaveTribe, removeMember, deleteTribe, updateTribe, promoteMember, demoteMember } = useTribes();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const insets = useSafeAreaInsets();
+  const { t, tn, tValue, dateLocale } = useI18n();
 
   // ── Mode & draft state ────────────────────────────────────────────────────
   const [mode, setMode] = useState<'map' | 'wizard_details' | 'wizard_location' | 'event_chat' | 'filters' | 'search_map' | 'tribe_panel' | 'create_tribe_wizard'>('map');
@@ -350,35 +352,30 @@ export default function MapScreen() {
   const handleCreate = async () => {
     try {
       if (!draft.title || !draft.categoryId || (draft.categoryId !== 'time_limited' && draft.categorySub.length === 0) || !draft.location || !draft.date)
-        return Alert.alert('Incomplete', 'Title, category, subcategory, date and location are all required.');
+        return notify(t('wizard.incompleteTitle'), t('wizard.incompleteBody'));
       await createEvent(draft.title, draft.categoryId, draft.categorySub, parseInt(draft.limit) || 10, draft.isPrivate, 5, {
-        latitude: draft.location.lat, longitude: draft.location.lng, address: draft.address || 'Pinned on map',
+        latitude: draft.location.lat, longitude: draft.location.lng, address: draft.address || '', // empty when unset; chat header translates the fallback
       }, draft.date, draft.ageGroup, draft.gender, draft.tribeId || undefined, draft.cyclicalRule || undefined);
       setMode('map');
       setDraft({ title: '', categoryId: '', categorySub: [], isPrivate: false, limit: '10', location: null, address: '', date: null, ageGroup: 'All Ages', gender: 'Anyone', tribeId: '', cyclicalRule: '' });
-      Alert.alert('Gathering Created', 'Your event is live. 5 Leaves were staked.');
-    } catch (err: any) { Alert.alert('Error', err.message); }
+      notify(t('wizard.liveTitle'), t('wizard.liveBody'));
+    } catch (err: any) { notify(t('common.error'), err.message); }
   };
 
   const handleJoin = async () => {
     if (!liveSelectedEvent || !user) return;
     if (liveSelectedEvent.id === 'tutorial-dummy') {
-      const done = () => { setSelectedEvent(null); setMode('map'); setTutStep(-1); markTutorialSeen(); };
-      if (Platform.OS === 'web') {
-        window.alert("You've joined your first event! Your 1 Leaf has been refunded since this is a simulation. Welcome to The Tribes.");
-        done();
-      } else {
-        Alert.alert("You're In!", "Successfully joined. Your 1 Leaf has been refunded — this is a practice event. Welcome to The Tribes!", [{ text: 'Let\'s go', onPress: done }]);
-      }
+      notify(t('tutorial.congratsTitle'), t('tutorial.congratsBody'));
+      setSelectedEvent(null); setMode('map'); setTutStep(-1); markTutorialSeen();
       return;
     }
-    if (user.tokens < 1) { notify('Out of Leaves', 'You need at least 1 Leaf to join. Refunds arrive after past events are finalized.'); return; }
-    if (liveSelectedEvent.participants.includes(user.uid)) { notify('Already joined', 'You are signed up for this gathering.'); return; }
-    if (liveSelectedEvent.participants.length >= liveSelectedEvent.participantLimit) { notify('This gathering is full', 'The circle has reached its limit. Try another fire on the map.'); return; }
+    if (user.tokens < 1) { notify(t('join.outOfLeavesTitle'), t('join.outOfLeavesBody')); return; }
+    if (liveSelectedEvent.participants.includes(user.uid)) { notify(t('join.alreadyJoinedTitle'), t('join.alreadyJoinedBody')); return; }
+    if (liveSelectedEvent.participants.length >= liveSelectedEvent.participantLimit) { notify(t('join.fullTitle'), t('join.fullBody')); return; }
     try {
       await joinEvent(liveSelectedEvent.id);
-      notify("You're in!", 'Your spot is secured and the chat is unlocked.');
-    } catch (e: any) { notify('Something went wrong', e.message); }
+      notify(t('join.joinedTitle'), t('join.joinedBody'));
+    } catch (e: any) { notify(t('common.error'), e.message); }
   };
 
   // ── Bonfire glow helpers ──────────────────────────────────────────────────
@@ -440,10 +437,10 @@ export default function MapScreen() {
               </View>
               <View>
                 <Text style={{ fontFamily: Typography.headline, fontSize: 19, color: Colors.textPrimary, letterSpacing: -0.2 }}>
-                  {isChief ? 'Chief Dashboard' : 'Council'}
+                  {isChief ? t('tribe.chiefDashboard') : t('tribe.council')}
                 </Text>
                 <Text style={{ fontFamily: Typography.bodyLight, fontSize: 11, color: Colors.textMuted, marginTop: 1 }}>
-                  {isChief ? 'Full command of the tribe' : 'Leader privileges'}
+                  {isChief ? t('tribe.chiefSubtitle') : t('tribe.councilSubtitle')}
                 </Text>
               </View>
             </View>
@@ -459,26 +456,26 @@ export default function MapScreen() {
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 }}>
                   <Feather name="user-check" size={13} color={Colors.gold} />
                   <Text style={{ fontFamily: Typography.bodyLight, fontSize: 11, color: Colors.gold, letterSpacing: 1.4, textTransform: 'uppercase' }}>
-                    {liveSelectedTribe.pendingApplicants.length} Pending {liveSelectedTribe.pendingApplicants.length === 1 ? 'Application' : 'Applications'}
+                    {tn('tribe.pendingApplications', liveSelectedTribe.pendingApplicants.length)}
                   </Text>
                 </View>
                 {liveSelectedTribe.pendingApplicants.map((appUid: string) => (
                   <View key={appUid} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.04)', padding: 13, borderRadius: 12, marginBottom: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' }}>
                     <TouchableOpacity onPress={() => setProfileViewUid(appUid)}>
                       <Text style={{ fontSize: 14, fontFamily: Typography.bodyMedium, color: Colors.textPrimary }}>
-                        {liveSelectedTribe.memberNames?.[appUid] || `Wanderer ${appUid.substring(0, 6)}`}
+                        {liveSelectedTribe.memberNames?.[appUid] || t('tribe.wanderer', { id: appUid.substring(0, 6) })}
                       </Text>
                     </TouchableOpacity>
                     <View style={{ flexDirection: 'row', gap: 8 }}>
                       <TouchableOpacity
-                        onPress={async () => { try { await rejectApplicant(liveSelectedTribe.id, appUid); Alert.alert('', 'Application rejected.'); } catch { Alert.alert('Error', 'Failed to reject.'); } }}
+                        onPress={async () => { try { await rejectApplicant(liveSelectedTribe.id, appUid); notify(t('tribe.rejected')); } catch { notify(t('tribe.rejectFailed')); } }}
                         style={{ backgroundColor: Colors.dangerSoft, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 9999, borderWidth: 1, borderColor: Colors.dangerBorder }}>
-                        <Text style={{ fontFamily: Typography.bodyMedium, color: Colors.danger, fontSize: 12 }}>Reject</Text>
+                        <Text style={{ fontFamily: Typography.bodyMedium, color: Colors.danger, fontSize: 12 }}>{t('tribe.reject')}</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
-                        onPress={async () => { try { await acceptApplicant(liveSelectedTribe.id, appUid); Alert.alert('', 'Initiated into the tribe.'); } catch { Alert.alert('Error', 'Failed to accept.'); } }}
+                        onPress={async () => { try { await acceptApplicant(liveSelectedTribe.id, appUid); notify(t('tribe.accepted')); } catch { notify(t('tribe.acceptFailed')); } }}
                         style={{ backgroundColor: Colors.goldDim, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 9999, borderWidth: 1, borderColor: Colors.goldBorder }}>
-                        <Text style={{ fontFamily: Typography.bodyMedium, color: Colors.gold, fontSize: 12 }}>Accept</Text>
+                        <Text style={{ fontFamily: Typography.bodyMedium, color: Colors.gold, fontSize: 12 }}>{t('tribe.accept')}</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -490,11 +487,11 @@ export default function MapScreen() {
             <View style={{ backgroundColor: Colors.glassCardBg, padding: 16, borderRadius: 16, marginBottom: 18, borderWidth: 1, borderColor: Colors.glassCardBorder }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                 <Feather name="radio" size={13} color={Colors.gold} />
-                <Text style={{ fontFamily: Typography.bodyLight, fontSize: 11, color: Colors.gold, letterSpacing: 1.4, textTransform: 'uppercase' }}>Broadcast Signal</Text>
+                <Text style={{ fontFamily: Typography.bodyLight, fontSize: 11, color: Colors.gold, letterSpacing: 1.4, textTransform: 'uppercase' }}>{t('tribe.broadcast')}</Text>
               </View>
               <TextInput
                 style={{ backgroundColor: 'rgba(255,255,255,0.07)', borderRadius: 12, padding: 14, fontSize: 14, fontFamily: Typography.body, textAlignVertical: 'top', height: 90, color: '#fff', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' }}
-                placeholder="Write an announcement to your tribe…"
+                placeholder={t('tribe.announcementPlaceholder')}
                 placeholderTextColor="rgba(255,255,255,0.28)"
                 multiline
                 value={announcementText}
@@ -508,7 +505,7 @@ export default function MapScreen() {
                   setShowManagement(false);
                 }}
                 style={{ backgroundColor: Colors.glassBtnBg, height: 56, borderRadius: 9999, alignItems: 'center', justifyContent: 'center', marginTop: 10, borderWidth: 1, borderColor: Colors.gold }}>
-                <Text style={{ color: '#fff', fontFamily: Typography.bodyBold, fontSize: 14 }}>Send Announcement</Text>
+                <Text style={{ color: '#fff', fontFamily: Typography.bodyBold, fontSize: 14 }}>{t('tribe.sendAnnouncement')}</Text>
               </TouchableOpacity>
             </View>
 
@@ -516,7 +513,7 @@ export default function MapScreen() {
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
               <Feather name="users" size={13} color={Colors.gold} />
               <Text style={{ fontFamily: Typography.bodyLight, fontSize: 11, color: Colors.gold, letterSpacing: 1.4, textTransform: 'uppercase' }}>
-                Members ({liveSelectedTribe.members.length})
+                {t('tribe.membersHeader', { n: liveSelectedTribe.members.length })}
               </Text>
             </View>
             <View style={{ backgroundColor: Colors.glassCardBg, borderRadius: 16, overflow: 'hidden', marginBottom: 18, borderWidth: 1, borderColor: Colors.glassCardBorder }}>
@@ -537,9 +534,9 @@ export default function MapScreen() {
                         </Text>
                       </TouchableOpacity>
                       {mIsChief ? (
-                        <Text style={{ fontFamily: Typography.bodyLight, fontSize: 10, color: Colors.gold, letterSpacing: 0.8 }}>Chief</Text>
+                        <Text style={{ fontFamily: Typography.bodyLight, fontSize: 10, color: Colors.gold, letterSpacing: 0.8 }}>{t('tribe.chief')}</Text>
                       ) : mIsLeader ? (
-                        <Text style={{ fontFamily: Typography.bodyLight, fontSize: 10, color: '#7A8FA0', letterSpacing: 0.8 }}>Leader</Text>
+                        <Text style={{ fontFamily: Typography.bodyLight, fontSize: 10, color: '#7A8FA0', letterSpacing: 0.8 }}>{t('tribe.leader')}</Text>
                       ) : null}
                     </View>
                     <View style={{ flexDirection: 'row', gap: 4 }}>
@@ -550,7 +547,7 @@ export default function MapScreen() {
                       )}
                       {!mIsChief && (isChief || (isLeader && !mIsLeader)) && (
                         <TouchableOpacity
-                          onPress={() => Alert.alert('Remove Member', `Remove ${liveSelectedTribe.memberNames[mUid]}?`, [{ text: 'Cancel', style: 'cancel' }, { text: 'Remove', style: 'destructive', onPress: () => removeMember(liveSelectedTribe.id, mUid) }])}
+                          onPress={() => { confirmDialog(t('tribe.removeTitle'), t('tribe.removeConfirm', { name: liveSelectedTribe.memberNames[mUid] || '?' }), t('tribe.removeAction'), true).then((ok: boolean) => { if (ok) removeMember(liveSelectedTribe.id, mUid); }); }}
                           style={{ padding: 7 }}>
                           <Feather name="user-x" size={16} color={Colors.danger} />
                         </TouchableOpacity>
@@ -564,14 +561,11 @@ export default function MapScreen() {
             {/* Dissolve tribe */}
             {isChief && (
               <TouchableOpacity
-                onPress={() => Alert.alert('DANGER', 'Permanently dissolve the tribe?', [
-                  { text: 'Cancel', style: 'cancel' },
-                  { text: 'Dissolve', style: 'destructive', onPress: () => { deleteTribe(liveSelectedTribe.id); setSelectedTribe(null); setShowManagement(false); } },
-                ])}
+                onPress={() => { confirmDialog(t('tribe.dissolveTitle'), t('tribe.dissolveConfirm'), t('tribe.dissolveAction'), true).then((ok: boolean) => { if (ok) { deleteTribe(liveSelectedTribe.id); setSelectedTribe(null); setShowManagement(false); } }); }}
                 style={{ backgroundColor: Colors.dangerSoft, height: 56, borderRadius: 9999, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: Colors.dangerBorder }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                   <Feather name="alert-triangle" size={15} color={Colors.danger} />
-                  <Text style={{ fontFamily: Typography.bodyBold, color: Colors.danger }}>Dissolve Tribe</Text>
+                  <Text style={{ fontFamily: Typography.bodyBold, color: Colors.danger }}>{t('tribe.dissolveTitle')}</Text>
                 </View>
               </TouchableOpacity>
             )}
@@ -663,7 +657,7 @@ export default function MapScreen() {
             <ScrollView ref={scrollRef} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 10 }} onScroll={handleScroll} scrollEventThrottle={16}>
               {['30 Days', 'Today', 'Tomorrow', 'Weekend', 'Next Week', 'All'].map(d => (
                 <TouchableOpacity key={d} onPress={() => setDateFilter(d)} style={[styles.datePill, dateFilter === d && styles.datePillActive]}>
-                  <Text style={[styles.datePillText, dateFilter === d && styles.datePillTextActive]}>{d}</Text>
+                  <Text style={[styles.datePillText, dateFilter === d && styles.datePillTextActive]}>{t(`map.dateFilters.${d}`)}</Text>
                 </TouchableOpacity>
               ))}
             </ScrollView>
@@ -692,13 +686,11 @@ export default function MapScreen() {
             <BlurView intensity={65} tint="dark" style={styles.emptyHintPill}>
               <Feather name="wind" size={13} color={Colors.textMuted} />
               <Text style={styles.emptyHintText}>
-                {hasNarrowingFilters
-                  ? 'No gatherings match your filters.'
-                  : 'The land is quiet. Light the first fire.'}
+                {hasNarrowingFilters ? t('map.emptyFiltered') : t('map.emptyQuiet')}
               </Text>
               {hasNarrowingFilters && (
                 <TouchableOpacity onPress={clearAllFilters}>
-                  <Text style={styles.emptyHintAction}>Show all</Text>
+                  <Text style={styles.emptyHintAction}>{t('map.showAll')}</Text>
                 </TouchableOpacity>
               )}
             </BlurView>
@@ -718,7 +710,7 @@ export default function MapScreen() {
             <Feather name="search" size={16} color={Colors.textMuted} style={{ marginRight: 10 }} />
             <TextInput
               style={[styles.input, { flex: 1, marginBottom: 0, paddingVertical: 12, backgroundColor: 'transparent', borderWidth: 0 }]}
-              placeholder="City, neighborhood…"
+              placeholder={t('map.searchPlaceholder')}
               placeholderTextColor={Colors.textPlaceholder}
               autoFocus
               value={wizardQuery}
@@ -753,17 +745,17 @@ export default function MapScreen() {
       <View style={styles.bottomSheet}>
       <View style={styles.sheetHandle} />
       <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
-        <Text style={[styles.sheetTitle, { marginTop: 4, marginBottom: 20 }]}>Design your Gathering</Text>
+        <Text style={[styles.sheetTitle, { marginTop: 4, marginBottom: 20 }]}>{t('wizard.title')}</Text>
 
-        <TextInput style={styles.input} placeholder="Event title" placeholderTextColor={Colors.textPlaceholder} value={draft.title} onChangeText={t => setDraft({ ...draft, title: t })} />
+        <TextInput style={styles.input} placeholder={t('wizard.titlePlaceholder')} placeholderTextColor={Colors.textPlaceholder} value={draft.title} onChangeText={t => setDraft({ ...draft, title: t })} />
 
         {/* Categories */}
-        <Text style={styles.fieldLabel}>CATEGORY</Text>
+        <Text style={styles.fieldLabel}>{t('wizard.category')}</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 14 }} contentContainerStyle={{ gap: 8, paddingVertical: 4 }}>
           {EVENT_CATEGORIES.map(cat => (
             <TouchableOpacity key={cat.id} style={[styles.catChip, draft.categoryId === cat.id && { backgroundColor: cat.color + '28', borderColor: cat.color + '70' }]} onPress={() => setDraft({ ...draft, categoryId: cat.id as CategoryGroupId, categorySub: [] })}>
               <Feather name={cat.icon} size={13} color={draft.categoryId === cat.id ? cat.color : Colors.textMuted} />
-              <Text style={[styles.catChipText, draft.categoryId === cat.id && { color: cat.color }]}>{cat.label}</Text>
+              <Text style={[styles.catChipText, draft.categoryId === cat.id && { color: cat.color }]}>{tValue('categories', cat.id)}</Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
@@ -771,7 +763,7 @@ export default function MapScreen() {
         {/* Subcategories */}
         {draft.categoryId && EVENT_CATEGORIES.find(c => c.id === draft.categoryId)?.subgroups.length ? (
           <>
-            <Text style={styles.fieldLabel}>SUBCATEGORIES</Text>
+            <Text style={styles.fieldLabel}>{t('wizard.subcategories')}</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 20 }} contentContainerStyle={{ gap: 8, paddingVertical: 4 }}>
               {EVENT_CATEGORIES.find(c => c.id === draft.categoryId)?.subgroups.map(sub => {
                 const catColor = EVENT_CATEGORIES.find(c => c.id === draft.categoryId)?.color || Colors.gold;
@@ -782,9 +774,9 @@ export default function MapScreen() {
                       const subs = draft.categorySub;
                       if (subs.includes(sub)) setDraft({ ...draft, categorySub: subs.filter(s => s !== sub) });
                       else if (subs.length < 5) setDraft({ ...draft, categorySub: [...subs, sub] });
-                      else { if (Platform.OS === 'web') window.alert('Max 5 subcategories.'); else Alert.alert('Limit', 'You can select up to 5 subcategories.'); }
+                      else notify(t('wizard.maxSubcategories'));
                     }}>
-                    <Text style={[styles.subChipText, isActive && { color: catColor }]}>{sub}</Text>
+                    <Text style={[styles.subChipText, isActive && { color: catColor }]}>{tValue('subgroups', sub)}</Text>
                   </TouchableOpacity>
                 );
               })}
@@ -793,30 +785,30 @@ export default function MapScreen() {
         ) : null}
 
         {/* Age group */}
-        <Text style={styles.fieldLabel}>AGE GROUP</Text>
+        <Text style={styles.fieldLabel}>{t('wizard.ageGroup')}</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 20 }} contentContainerStyle={{ gap: 8, paddingVertical: 4 }}>
           {['All Ages', 'Under 18', '18-25', '26-35', '36-45', '45+'].map(age => (
             <TouchableOpacity key={age} style={[styles.subChip, draft.ageGroup === age && { backgroundColor: Colors.goldDim, borderColor: Colors.goldBorder }]} onPress={() => setDraft({ ...draft, ageGroup: age })}>
-              <Text style={[styles.subChipText, draft.ageGroup === age && { color: Colors.gold }]}>{age}</Text>
+              <Text style={[styles.subChipText, draft.ageGroup === age && { color: Colors.gold }]}>{tValue('ages', age)}</Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
 
         {/* Gender */}
-        <Text style={styles.fieldLabel}>TARGET GENDER</Text>
+        <Text style={styles.fieldLabel}>{t('wizard.gender')}</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 20 }} contentContainerStyle={{ gap: 8, paddingVertical: 4 }}>
           {['Anyone', 'Male', 'Female', 'LGBTQIA+'].map(gender => (
             <TouchableOpacity key={gender} style={[styles.subChip, draft.gender === gender && { backgroundColor: Colors.goldDim, borderColor: Colors.goldBorder }]} onPress={() => setDraft({ ...draft, gender })}>
-              <Text style={[styles.subChipText, draft.gender === gender && { color: Colors.gold }]}>{gender}</Text>
+              <Text style={[styles.subChipText, draft.gender === gender && { color: Colors.gold }]}>{tValue('genders', gender)}</Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
 
         {/* Date picker */}
-        <Text style={styles.fieldLabel}>DATE & TIME</Text>
+        <Text style={styles.fieldLabel}>{t('wizard.dateTime')}</Text>
         <TouchableOpacity style={[styles.input, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }]} onPress={() => setShowDatePicker(true)}>
           <Text style={{ fontFamily: Typography.body, fontSize: 15, color: draft.date ? Colors.textPrimary : Colors.textPlaceholder }}>
-            {draft.date ? format(draft.date, 'MMM d, yyyy · h:mm a') : 'Select date and time'}
+            {draft.date ? format(draft.date, t('dates.picker'), { locale: dateLocale }) : t('wizard.selectDateTime')}
           </Text>
           <Feather name="calendar" size={15} color={Colors.gold} />
         </TouchableOpacity>
@@ -830,8 +822,8 @@ export default function MapScreen() {
         )}
 
         {/* Location search */}
-        <Text style={styles.fieldLabel}>LOCATION</Text>
-        <TextInput style={styles.input} placeholder="City or street" placeholderTextColor={Colors.textPlaceholder} value={wizardQuery} onChangeText={searchWizardLocation} />
+        <Text style={styles.fieldLabel}>{t('wizard.location')}</Text>
+        <TextInput style={styles.input} placeholder={t('wizard.locationPlaceholder')} placeholderTextColor={Colors.textPlaceholder} value={wizardQuery} onChangeText={searchWizardLocation} />
         {wizardSuggestions.length > 0 && (
           <View style={styles.suggestions}>
             {wizardSuggestions.map((s, i) => (
@@ -844,13 +836,13 @@ export default function MapScreen() {
         )}
 
         {/* Frequency */}
-        <Text style={styles.fieldLabel}>FREQUENCY</Text>
+        <Text style={styles.fieldLabel}>{t('wizard.frequency')}</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 24 }} contentContainerStyle={{ gap: 8, paddingVertical: 4 }}>
           {['once', 'weekly', 'monthly'].map(rule => {
             const isActive = draft.cyclicalRule === rule || (rule === 'once' && !draft.cyclicalRule);
             return (
               <TouchableOpacity key={rule} style={[styles.subChip, isActive && { backgroundColor: Colors.goldDim, borderColor: Colors.goldBorder }]} onPress={() => setDraft({ ...draft, cyclicalRule: rule === 'once' ? '' : rule })}>
-                <Text style={[styles.subChipText, isActive && { color: Colors.gold }]}>{rule === 'once' ? 'One-time' : rule.charAt(0).toUpperCase() + rule.slice(1)}</Text>
+                <Text style={[styles.subChipText, isActive && { color: Colors.gold }]}>{rule === 'once' ? t('wizard.once') : rule === 'weekly' ? t('wizard.weekly') : t('wizard.monthly')}</Text>
               </TouchableOpacity>
             );
           })}
@@ -860,13 +852,13 @@ export default function MapScreen() {
       {/* Sticky actions */}
       <View style={[styles.sheetActions, { paddingBottom: 16 + insets.bottom }]}>
         <TouchableOpacity style={[styles.btnSecondary, { flex: 1 }]} onPress={() => setMode('map')}>
-          <Text style={styles.btnSecondaryText}>Cancel</Text>
+          <Text style={styles.btnSecondaryText}>{t('common.cancel')}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={[styles.btnPrimary, { flex: 2 }]} onPress={() => {
           if (draft.location) cameraRef.current?.setCamera({ centerCoordinate: [draft.location.lng, draft.location.lat], zoomLevel: 14, animationDuration: 1000 });
           setMode('wizard_location');
         }}>
-          <Text style={styles.btnPrimaryText}>Set Location</Text>
+          <Text style={styles.btnPrimaryText}>{t('wizard.setLocation')}</Text>
         </TouchableOpacity>
       </View>
       </View>
@@ -877,17 +869,17 @@ export default function MapScreen() {
   const renderWizardLocation = () => (
     <View style={{ position: 'absolute', top: insets.top + 10, left: 16, right: 16 }}>
       <View style={{ backgroundColor: 'rgba(26,36,33,0.94)', borderRadius: 20, padding: 22, borderWidth: 1, borderColor: Colors.hairline }}>
-        <Text style={styles.sheetTitle}>Drop the Pin</Text>
-        <Text style={styles.sheetSub}>Tap anywhere on the map to set the exact location.</Text>
+        <Text style={styles.sheetTitle}>{t('wizard.dropPin')}</Text>
+        <Text style={styles.sheetSub}>{t('wizard.dropPinHint')}</Text>
         {draft.location && (
           <View style={{ flexDirection: 'row', gap: 10, marginTop: 6 }}>
             <TouchableOpacity style={[styles.btnSecondary, { flex: 1 }]} onPress={() => setMode('wizard_details')}>
-              <Text style={styles.btnSecondaryText}>Back</Text>
+              <Text style={styles.btnSecondaryText}>{t('common.back')}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.btnPrimary, { flex: 2 }]} onPress={handleCreate}>
-              <Text style={styles.btnPrimaryText}>Stake 5</Text>
+              <Text style={styles.btnPrimaryText}>{t('wizard.stakePrefix')}</Text>
               <Image source={LEAF} style={[styles.btnLeafInline]} />
-              <Text style={styles.btnPrimaryText}>& Finalize</Text>
+              <Text style={styles.btnPrimaryText}>{t('wizard.stakeSuffix')}</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -901,8 +893,8 @@ export default function MapScreen() {
     <View style={[styles.bottomSheetFull, { paddingBottom: 16 + insets.bottom }]}>
       <View style={[styles.chatHeader, { paddingBottom: 0 }]}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.sheetTitle}>Filter Gatherings</Text>
-          <Text style={styles.sheetSub}>Refine the map to your vibe.</Text>
+          <Text style={styles.sheetTitle}>{t('filters.title')}</Text>
+          <Text style={styles.sheetSub}>{t('filters.subtitle')}</Text>
         </View>
         <TouchableOpacity onPress={() => setMode('map')} style={{ padding: 8 }}>
           <Feather name="x" size={20} color={Colors.textSecondary} />
@@ -921,7 +913,7 @@ export default function MapScreen() {
                 >
                   <Feather name={cat.icon} size={17} color={isActive ? cat.color : Colors.textMuted} />
                   <Text style={[styles.filterChipText, isActive && { color: cat.color }]}>
-                    {cat.label}{isActive && activeFilters[cat.id]?.length > 0 ? `  ${activeFilters[cat.id].length}` : ''}
+                    {tValue('categories', cat.id)}{isActive && activeFilters[cat.id]?.length > 0 ? `  ${activeFilters[cat.id].length}` : ''}
                   </Text>
                 </TouchableOpacity>
                 {cat.subgroups.length > 0 && (
@@ -936,7 +928,7 @@ export default function MapScreen() {
                     const isSubActive = isActive && (activeFilters[cat.id].length === 0 || activeFilters[cat.id].includes(sub));
                     return (
                       <TouchableOpacity key={sub} style={[styles.subChip, isSubActive && { backgroundColor: cat.color + '22', borderColor: cat.color + '60' }]} onPress={() => toggleSubFilter(cat.id, sub)}>
-                        <Text style={[styles.subChipText, isSubActive && { color: cat.color }]}>{sub}</Text>
+                        <Text style={[styles.subChipText, isSubActive && { color: cat.color }]}>{tValue('subgroups', sub)}</Text>
                       </TouchableOpacity>
                     );
                   })}
@@ -953,7 +945,7 @@ export default function MapScreen() {
               onPress={() => { if (activeAgeFilters.length > 0) setActiveAgeFilters([]); else setExpandedAge(!expandedAge); }}>
               <Feather name="users" size={17} color={activeAgeFilters.length > 0 ? Colors.gold : Colors.textMuted} />
               <Text style={[styles.filterChipText, activeAgeFilters.length > 0 && { color: Colors.gold }]}>
-                Age Group{activeAgeFilters.length > 0 ? `  ${activeAgeFilters.length}` : ''}
+                {t('filters.ageGroup')}{activeAgeFilters.length > 0 ? `  ${activeAgeFilters.length}` : ''}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.expandBtn} onPress={() => setExpandedAge(!expandedAge)}>
@@ -965,7 +957,7 @@ export default function MapScreen() {
               {['All Ages', 'Under 18', '18-25', '26-35', '36-45', '45+'].map(age => (
                 <TouchableOpacity key={age} style={[styles.subChip, activeAgeFilters.includes(age) && { backgroundColor: Colors.goldDim, borderColor: Colors.goldBorder }]}
                   onPress={() => activeAgeFilters.includes(age) ? setActiveAgeFilters(activeAgeFilters.filter(a => a !== age)) : setActiveAgeFilters([...activeAgeFilters, age])}>
-                  <Text style={[styles.subChipText, activeAgeFilters.includes(age) && { color: Colors.gold }]}>{age}</Text>
+                  <Text style={[styles.subChipText, activeAgeFilters.includes(age) && { color: Colors.gold }]}>{tValue('ages', age)}</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -979,7 +971,7 @@ export default function MapScreen() {
               onPress={() => { if (activeGenderFilters.length > 0) setActiveGenderFilters([]); else setExpandedGender(!expandedGender); }}>
               <Feather name="heart" size={17} color={activeGenderFilters.length > 0 ? Colors.gold : Colors.textMuted} />
               <Text style={[styles.filterChipText, activeGenderFilters.length > 0 && { color: Colors.gold }]}>
-                Gender{activeGenderFilters.length > 0 ? `  ${activeGenderFilters.length}` : ''}
+                {t('filters.gender')}{activeGenderFilters.length > 0 ? `  ${activeGenderFilters.length}` : ''}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.expandBtn} onPress={() => setExpandedGender(!expandedGender)}>
@@ -991,7 +983,7 @@ export default function MapScreen() {
               {['Anyone', 'Male', 'Female', 'LGBTQIA+'].map(gender => (
                 <TouchableOpacity key={gender} style={[styles.subChip, activeGenderFilters.includes(gender) && { backgroundColor: Colors.goldDim, borderColor: Colors.goldBorder }]}
                   onPress={() => activeGenderFilters.includes(gender) ? setActiveGenderFilters(activeGenderFilters.filter(a => a !== gender)) : setActiveGenderFilters([...activeGenderFilters, gender])}>
-                  <Text style={[styles.subChipText, activeGenderFilters.includes(gender) && { color: Colors.gold }]}>{gender}</Text>
+                  <Text style={[styles.subChipText, activeGenderFilters.includes(gender) && { color: Colors.gold }]}>{tValue('genders', gender)}</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -1008,17 +1000,17 @@ export default function MapScreen() {
     );
     const NextBtn = ({ onPress }: any) => (
       <TouchableOpacity style={[styles.btnPrimary, { alignSelf: 'flex-end', height: 44, paddingHorizontal: 20 }]} onPress={onPress}>
-        <Text style={styles.btnPrimaryText}>Next</Text>
+        <Text style={styles.btnPrimaryText}>{t('common.next')}</Text>
       </TouchableOpacity>
     );
     switch (tutStep) {
       case 0:
         return (
           <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.78)', justifyContent: 'center', alignItems: 'center', zIndex: 9999, paddingHorizontal: 36 }]}>
-            <Text style={[styles.sheetTitle, { fontSize: 32, textAlign: 'center', marginBottom: 14 }]}>Welcome to The Tribes</Text>
-            <Text style={[styles.sheetSub, { textAlign: 'center', marginBottom: 36, fontSize: 16, lineHeight: 26 }]}>Discover local gatherings, build community, and find your people. Quick tour?</Text>
+            <Text style={[styles.sheetTitle, { fontSize: 32, textAlign: 'center', marginBottom: 14 }]}>{t('tutorial.welcomeTitle')}</Text>
+            <Text style={[styles.sheetSub, { textAlign: 'center', marginBottom: 36, fontSize: 16, lineHeight: 26 }]}>{t('tutorial.welcomeBody')}</Text>
             <TouchableOpacity style={[styles.btnPrimaryFull, { width: 200 }]} onPress={() => setTutStep(1)}>
-              <Text style={styles.btnPrimaryFullText}>Start Tour</Text>
+              <Text style={styles.btnPrimaryFullText}>{t('tutorial.startTour')}</Text>
             </TouchableOpacity>
           </View>
         );
@@ -1027,8 +1019,8 @@ export default function MapScreen() {
           <View style={[StyleSheet.absoluteFill, { pointerEvents: 'box-none', zIndex: 9999 }]}>
             <TutCard style={{ position: 'absolute', top: 118, left: 20, maxWidth: 250 }}>
               <Feather name="arrow-up" size={24} color={Colors.gold} style={{ position: 'absolute', top: -22, left: 22 }} />
-              <Text style={styles.tutTitle}>1. Your Leaves</Text>
-              <Text style={styles.tutBody}>Leaves are your currency. Use them to join and create events. You get 5 free every day.</Text>
+              <Text style={styles.tutTitle}>{t('tutorial.s1Title')}</Text>
+              <Text style={styles.tutBody}>{t('tutorial.s1Body')}</Text>
               <NextBtn onPress={() => setTutStep(2)} />
             </TutCard>
           </View>
@@ -1038,8 +1030,8 @@ export default function MapScreen() {
           <View style={[StyleSheet.absoluteFill, { pointerEvents: 'box-none', zIndex: 9999 }]}>
             <TutCard style={{ position: 'absolute', top: 110, right: 20, maxWidth: 250 }}>
               <Feather name="arrow-up" size={24} color={Colors.gold} style={{ position: 'absolute', top: -22, right: 18 }} />
-              <Text style={styles.tutTitle}>2. Settings</Text>
-              <Text style={styles.tutBody}>Update your profile, preferences, and home location from here.</Text>
+              <Text style={styles.tutTitle}>{t('tutorial.s2Title')}</Text>
+              <Text style={styles.tutBody}>{t('tutorial.s2Body')}</Text>
               <NextBtn onPress={() => setTutStep(3)} />
             </TutCard>
           </View>
@@ -1049,8 +1041,8 @@ export default function MapScreen() {
           <View style={[StyleSheet.absoluteFill, { pointerEvents: 'box-none', zIndex: 9999 }]}>
             <TutCard style={{ position: 'absolute', top: 220, right: 20, maxWidth: 250 }}>
               <Feather name="arrow-up" size={24} color={Colors.gold} style={{ position: 'absolute', top: -22, right: 18 }} />
-              <Text style={styles.tutTitle}>3. Navigate</Text>
-              <Text style={styles.tutBody}>Centre the map on your home location, or search to fly anywhere in the world.</Text>
+              <Text style={styles.tutTitle}>{t('tutorial.s3Title')}</Text>
+              <Text style={styles.tutBody}>{t('tutorial.s3Body')}</Text>
               <NextBtn onPress={() => setTutStep(4)} />
             </TutCard>
           </View>
@@ -1060,8 +1052,8 @@ export default function MapScreen() {
           <View style={[StyleSheet.absoluteFill, { pointerEvents: 'box-none', zIndex: 9999 }]}>
             <TutCard style={{ position: 'absolute', bottom: 120, right: 20, maxWidth: 250 }}>
               <Feather name="arrow-down" size={24} color={Colors.gold} style={{ position: 'absolute', bottom: -22, right: 26 }} />
-              <Text style={styles.tutTitle}>4. Find Your Vibe</Text>
-              <Text style={styles.tutBody}>Use the filter to discover events by category, age group, or gender.</Text>
+              <Text style={styles.tutTitle}>{t('tutorial.s4Title')}</Text>
+              <Text style={styles.tutBody}>{t('tutorial.s4Body')}</Text>
               <NextBtn onPress={() => setTutStep(5)} />
             </TutCard>
           </View>
@@ -1071,8 +1063,8 @@ export default function MapScreen() {
           <View style={{ position: 'absolute', top: 200, left: 20, zIndex: 9999 }}>
             <TutCard style={{ maxWidth: 260 }}>
               <Feather name="arrow-up" size={24} color={Colors.gold} style={{ position: 'absolute', top: -22, left: 16 }} />
-              <Text style={styles.tutTitle}>5. Create an Event</Text>
-              <Text style={styles.tutBody}>Tap the gold + button to host your own gathering and assemble a tribe.</Text>
+              <Text style={styles.tutTitle}>{t('tutorial.s5Title')}</Text>
+              <Text style={styles.tutBody}>{t('tutorial.s5Body')}</Text>
               <NextBtn onPress={() => setTutStep(6)} />
             </TutCard>
           </View>
@@ -1081,10 +1073,10 @@ export default function MapScreen() {
         return (
           <View style={{ position: 'absolute', top: 100, left: '50%', transform: [{ translateX: -150 }], zIndex: 9999 }}>
             <TutCard style={{ width: 300 }}>
-              <Text style={styles.tutTitle}>6. Tribal Fires</Text>
-              <Text style={styles.tutBody}>Active events appear as bonfire pins. Tap the test pin at the map centre to practice.</Text>
+              <Text style={styles.tutTitle}>{t('tutorial.s6Title')}</Text>
+              <Text style={styles.tutBody}>{t('tutorial.s6Body')}</Text>
               <TouchableOpacity onPress={markTutorialSeen} style={{ alignSelf: 'center', paddingVertical: 6 }}>
-                <Text style={{ fontFamily: Typography.bodyLight, color: Colors.textMuted, fontSize: 13 }}>Skip tutorial</Text>
+                <Text style={{ fontFamily: Typography.bodyLight, color: Colors.textMuted, fontSize: 13 }}>{t('tutorial.skip')}</Text>
               </TouchableOpacity>
             </TutCard>
             <Feather name="arrow-down" size={24} color={Colors.gold} style={{ alignSelf: 'center', marginTop: 4 }} />
@@ -1094,8 +1086,8 @@ export default function MapScreen() {
         return (
           <View style={{ position: 'absolute', top: 120, left: '50%', transform: [{ translateX: -150 }], width: 300, zIndex: 9999 }} pointerEvents="none">
             <TutCard>
-              <Text style={styles.tutTitle}>7. Join a Tribe</Text>
-              <Text style={styles.tutBody}>This is a sealed Tribal Chat. Commit 1 Leaf to unlock the conversation and join the event.</Text>
+              <Text style={styles.tutTitle}>{t('tutorial.s7Title')}</Text>
+              <Text style={styles.tutBody}>{t('tutorial.s7Body')}</Text>
             </TutCard>
             <Feather name="arrow-down" size={24} color={Colors.gold} style={{ alignSelf: 'center', marginTop: 4 }} />
           </View>
@@ -1170,7 +1162,7 @@ export default function MapScreen() {
                     <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: cat?.color || Colors.gold, marginRight: 8 }} />
                     <View style={{ flex: 1 }}>
                       <Text style={styles.clusterPopupTitle} numberOfLines={1}>{ev.title}</Text>
-                      <Text style={styles.clusterPopupTime}>{ev.time ? format(new Date(ev.time), 'MMM d, HH:mm') : ''}</Text>
+                      <Text style={styles.clusterPopupTime}>{ev.time ? format(new Date(ev.time), t('dates.clusterTime'), { locale: dateLocale }) : ''}</Text>
                     </View>
                   </TouchableOpacity>
                 );

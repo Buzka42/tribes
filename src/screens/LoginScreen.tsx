@@ -6,8 +6,10 @@ import {
 import { auth } from '../config/firebase';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { Colors, Typography } from '../theme';
+import { useI18n } from '../i18n';
 
 export default function LoginScreen() {
+  const { t } = useI18n();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -16,18 +18,18 @@ export default function LoginScreen() {
 
   const handleAuth = async () => {
     setErrorMsg('');
-    if (!email || !password) { setErrorMsg('Please fill in all fields.'); return; }
+    if (!email || !password) { setErrorMsg(t('login.fillAllFields')); return; }
     setLoading(true);
     try {
       if (isLogin) await signInWithEmailAndPassword(auth, email, password);
       else await createUserWithEmailAndPassword(auth, email, password);
     } catch (error: any) {
       let msg = error.message;
-      if (error.code === 'auth/invalid-credential') msg = 'Incorrect email or password.';
-      if (error.code === 'auth/user-not-found') msg = 'No account found. Switch to Sign Up.';
-      if (error.code === 'auth/wrong-password') msg = 'Incorrect password, try again.';
-      if (error.code === 'auth/email-already-in-use') msg = 'Account exists. Switch to Sign In.';
-      if (error.code === 'auth/too-many-requests') msg = 'Too many attempts. Try again later.';
+      if (error.code === 'auth/invalid-credential') msg = t('login.errInvalidCredential');
+      if (error.code === 'auth/user-not-found') msg = t('login.errUserNotFound');
+      if (error.code === 'auth/wrong-password') msg = t('login.errWrongPassword');
+      if (error.code === 'auth/email-already-in-use') msg = t('login.errEmailInUse');
+      if (error.code === 'auth/too-many-requests') msg = t('login.errTooManyRequests');
       setErrorMsg(msg);
     } finally { setLoading(false); }
   };
@@ -40,11 +42,11 @@ export default function LoginScreen() {
         const provider = new GoogleAuthProvider();
         await signInWithPopup(auth, provider);
       } else {
-        setErrorMsg('Native Google Sign-In coming soon.');
+        setErrorMsg(t('login.googleNativeSoon'));
       }
     } catch (error: any) {
       let msg = error.message;
-      if (error.code === 'auth/popup-closed-by-user') msg = 'Sign-in cancelled.';
+      if (error.code === 'auth/popup-closed-by-user') msg = t('login.signInCancelled');
       setErrorMsg(msg);
     } finally { setLoading(false); }
   };
@@ -62,7 +64,7 @@ export default function LoginScreen() {
           <Image source={require('../assets/leaf.png')} style={styles.wordmarkLeaf} />
         </View>
         <Text style={styles.tagline}>
-          {isLogin ? 'Return to your people.' : 'Find your people.'}
+          {isLogin ? t('login.taglineReturn') : t('login.taglineFind')}
         </Text>
 
         {/* Error */}
@@ -74,7 +76,7 @@ export default function LoginScreen() {
         <View style={styles.fieldGroup}>
           <TextInput
             style={styles.input}
-            placeholder="Email address"
+            placeholder={t('login.email')}
             placeholderTextColor={Colors.textPlaceholder}
             value={email}
             onChangeText={setEmail}
@@ -84,7 +86,7 @@ export default function LoginScreen() {
           <View style={styles.fieldDivider} />
           <TextInput
             style={styles.input}
-            placeholder="Password"
+            placeholder={t('login.password')}
             placeholderTextColor={Colors.textPlaceholder}
             value={password}
             onChangeText={setPassword}
@@ -99,18 +101,18 @@ export default function LoginScreen() {
           <View style={styles.actions}>
             <TouchableOpacity style={styles.btnPrimary} onPress={handleAuth} activeOpacity={0.82}>
               {isLogin ? (
-                <Text style={styles.btnPrimaryText}>Sign In</Text>
+                <Text style={styles.btnPrimaryText}>{t('login.signIn')}</Text>
               ) : (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <Text style={styles.btnPrimaryText}>Sign Up — 10</Text>
+                  <Text style={styles.btnPrimaryText}>{t('login.signUpPrefix')}</Text>
                   <Image source={require('../assets/leaf.png')} style={styles.btnLeaf} />
-                  <Text style={styles.btnPrimaryText}>free</Text>
+                  <Text style={styles.btnPrimaryText}>{t('login.signUpSuffix')}</Text>
                 </View>
               )}
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.btnGhost} onPress={handleGoogleAuth} activeOpacity={0.75}>
-              <Text style={styles.btnGhostText}>Continue with Google</Text>
+              <Text style={styles.btnGhostText}>{t('login.google')}</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -121,9 +123,9 @@ export default function LoginScreen() {
           onPress={() => { setIsLogin(!isLogin); setErrorMsg(''); }}
         >
           <Text style={styles.switchText}>
-            {isLogin ? 'New here?' : 'Already a member?'}
+            {isLogin ? t('login.newHere') : t('login.alreadyMember')}
             {'  '}
-            <Text style={styles.switchLink}>{isLogin ? 'Create account' : 'Sign in'}</Text>
+            <Text style={styles.switchLink}>{isLogin ? t('login.createAccount') : t('login.signInLink')}</Text>
           </Text>
         </TouchableOpacity>
       </ScrollView>

@@ -1,5 +1,5 @@
 import { format } from 'date-fns';
-import React from 'react';
+import React, { useRef, useState } from 'react';
 import { styles } from './MapStyles';
 import { View, Text, Image, TouchableOpacity, TextInput, ScrollView, Platform, KeyboardAvoidingView, Share } from 'react-native';
 import { BlurView } from 'expo-blur';
@@ -7,10 +7,30 @@ import { Feather } from '@expo/vector-icons';
 import { Colors, Typography } from '../theme';
 import { renderMoons, SPIRIT_ASSETS } from '../utils/assets';
 import { notify, confirmDialog } from '../utils/dialogs';
+import { useChatMessages } from '../hooks/useChatMessages';
 
 export const EventChat = (props: any) => {
   const { selectedEvent, setSelectedEvent, setMode, user, events, joinEvent, leaveEvent, deleteEvent, finalizeEvent, finalizeChecked, setFinalizeChecked, submitFeedback, feedbackAnswer, setFeedbackAnswer, feedbackSubmitted, setFeedbackSubmitted, getUserFeedback, userFeedbackCache, setUserFeedbackCache, creatorStatsCache, setCreatorStatsCache, participantNamesCache, setParticipantNamesCache, getParticipantNames, tribes, setProfileViewUid, setSelectedTribe, handleJoin, setFormTribeChecked, formTribeChecked, setWizardDraft, setWizardStep } = props;
-  
+
+  const canChat = !!selectedEvent &&
+    (selectedEvent.creatorId === user?.uid ||
+      selectedEvent.participants?.includes(user?.uid || ""));
+  const [chatText, setChatText] = useState('');
+  const chatScrollRef = useRef<ScrollView>(null);
+  const { messages, sendMessage } = useChatMessages(canChat ? selectedEvent.id : null);
+
+  const handleSend = async () => {
+    const text = chatText.trim();
+    if (!text || !selectedEvent) return;
+    setChatText('');
+    try {
+      await sendMessage(selectedEvent.id, text, user?.displayName || 'Tribesman');
+    } catch (e: any) {
+      setChatText(text); // give the draft back so nothing is lost
+      notify('Message not sent', e.message);
+    }
+  };
+
     if (!selectedEvent) return null;
     const isJoined = selectedEvent.participants.includes(user?.uid || "");
     const isHost = selectedEvent.creatorId === user?.uid;
@@ -32,9 +52,11 @@ export const EventChat = (props: any) => {
 
     return (
       <KeyboardAvoidingView
-        style={styles.glassWrapperBottomFull}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.sheetOverlay}
+        behavior="padding"
+        pointerEvents="box-none"
       >
+        <View style={styles.glassWrapperBottomFull}>
         <BlurView
           intensity={90}
           tint="dark"
@@ -305,17 +327,53 @@ export const EventChat = (props: any) => {
           ) : (
             <View style={{ flex: 1 }}>
               <ScrollView
+                ref={chatScrollRef}
                 style={styles.chatScroll}
                 contentContainerStyle={{
                   paddingVertical: 10,
                   paddingBottom: 20,
                 }}
+                onContentSizeChange={() =>
+                  chatScrollRef.current?.scrollToEnd({ animated: true })
+                }
               >
-                <View style={styles.chatBubble}>
-                  <Text style={styles.chatText}>
-                    Welcome to the tribe! See you there.
-                  </Text>
-                </View>
+                {messages.length === 0 ? (
+                  <View style={styles.chatEmptyRow}>
+                    <Feather name="wind" size={13} color={Colors.textMuted} />
+                    <Text style={styles.chatEmptyText}>
+                      The fire is lit. Say hello to the tribe.
+                    </Text>
+                  </View>
+                ) : (
+                  messages.map((m, i) => {
+                    const isOwn = m.senderId === user?.uid;
+                    const showSender =
+                      !isOwn && (i === 0 || messages[i - 1].senderId !== m.senderId);
+                    return (
+                      <View
+                        key={m.id}
+                        style={[styles.msgRow, isOwn ? styles.msgRowOwn : styles.msgRowOther]}
+                      >
+                        {showSender && (
+                          <TouchableOpacity onPress={() => setProfileViewUid(m.senderId)}>
+                            <Text style={styles.msgSender}>{m.senderName}</Text>
+                          </TouchableOpacity>
+                        )}
+                        <View
+                          style={[
+                            styles.msgBubble,
+                            isOwn ? styles.msgBubbleOwn : styles.msgBubbleOther,
+                          ]}
+                        >
+                          <Text style={styles.msgText}>{m.text}</Text>
+                        </View>
+                        <Text style={styles.msgTime}>
+                          {m.createdAt ? format(m.createdAt, 'HH:mm') : 'sending…'}
+                        </Text>
+                      </View>
+                    );
+                  })
+                )}
               </ScrollView>
 
               {/* Finalize Mode for Host */}
@@ -673,15 +731,26 @@ export const EventChat = (props: any) => {
                     style={styles.chatInput}
                     placeholder="Send a message…"
                     placeholderTextColor={Colors.textPlaceholder}
+                    value={chatText}
+                    onChangeText={setChatText}
+                    onSubmitEditing={handleSend}
+                    returnKeyType="send"
+                    blurOnSubmit={false}
+                    maxLength={1000}
                   />
-                  <TouchableOpacity style={styles.btnPrimary}>
-                    <Text style={styles.btnPrimaryText}>Send</Text>
+                  <TouchableOpacity
+                    style={[styles.sendBtn, !chatText.trim() && { opacity: 0.4 }]}
+                    onPress={handleSend}
+                    disabled={!chatText.trim()}
+                  >
+                    <Feather name="send" size={16} color="#1A2421" />
                   </TouchableOpacity>
                 </View>
               )}
             </View>
           )}
         </BlurView>
+        </View>
       </KeyboardAvoidingView>
   );
 };

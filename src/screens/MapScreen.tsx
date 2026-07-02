@@ -380,14 +380,16 @@ export default function MapScreen() {
     const isChief = liveSelectedTribe.creatorId === user?.uid;
     const isLeader = isChief || (liveSelectedTribe.leaders || []).includes(user?.uid || '');
     return (
-      <KeyboardAvoidingView style={StyleSheet.absoluteFill as any} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      <KeyboardAvoidingView
+        style={[StyleSheet.absoluteFill as any, { justifyContent: 'flex-end' }]}
+        behavior="padding"
+      >
         <TouchableOpacity
           style={{ ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.55)' } as any}
           activeOpacity={1}
           onPress={() => setShowManagement(false)}
         />
         <View style={{
-          position: 'absolute', bottom: 0, left: 0, right: 0,
           backgroundColor: Colors.bgElevated,
           borderTopLeftRadius: 28, borderTopRightRadius: 28,
           borderTopWidth: 1, borderLeftWidth: 1, borderRightWidth: 1,
@@ -684,7 +686,8 @@ export default function MapScreen() {
 
   // ── Wizard: Details ───────────────────────────────────────────────────────
   const renderWizardDetails = () => (
-    <KeyboardAvoidingView style={styles.bottomSheet} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+    <KeyboardAvoidingView style={styles.sheetOverlay} behavior="padding" pointerEvents="box-none">
+      <View style={styles.bottomSheet}>
       <View style={styles.sheetHandle} />
       <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
         <Text style={[styles.sheetTitle, { marginTop: 4, marginBottom: 20 }]}>Design your Gathering</Text>
@@ -802,6 +805,7 @@ export default function MapScreen() {
         }}>
           <Text style={styles.btnPrimaryText}>Set Location</Text>
         </TouchableOpacity>
+      </View>
       </View>
     </KeyboardAvoidingView>
   );
@@ -1212,8 +1216,15 @@ const styles = StyleSheet.create({
   devBtnText: { fontFamily: Typography.body, color: 'rgba(255,120,120,0.9)', fontSize: 9, textAlign: 'center' },
 
   // ── Dark sheet base ───────────────────────────────────────────────────────
+  // Sits inside sheetOverlay (normal flow) so KeyboardAvoidingView padding
+  // can lift it above the keyboard.
+  sheetOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'flex-end',
+    zIndex: 100, elevation: 100,
+  },
   bottomSheet: {
-    position: 'absolute', bottom: 0, left: 0, right: 0, height: '74%',
+    height: '74%',
     borderTopLeftRadius: 24, borderTopRightRadius: 24,
     backgroundColor: Colors.bg, overflow: 'hidden',
   },

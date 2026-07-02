@@ -249,11 +249,17 @@ export const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 25,
   },
+  // Full-screen overlay that anchors a sheet to the bottom. The sheet itself
+  // (glassWrapperBottomFull) stays in normal flow so KeyboardAvoidingView
+  // padding can lift it above the keyboard — absolute-positioned sheets
+  // ignore the padding and end up hidden behind the keyboard.
+  sheetOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: "flex-end",
+    zIndex: 100,
+    elevation: 100,
+  },
   glassWrapperBottomFull: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
     height: "60%",
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
@@ -261,8 +267,6 @@ export const styles = StyleSheet.create({
     shadowColor: "#000",
     shadowOpacity: 0.3,
     shadowRadius: 30,
-    zIndex: 100,
-    elevation: 100,
   },
   glassWrapperTop: {
     position: "absolute",
@@ -455,32 +459,86 @@ export const styles = StyleSheet.create({
 
   chatOpen: { flex: 1 },
   chatScroll: { flex: 1 },
-  chatBubble: {
-    backgroundColor: "rgba(255,255,255,0.06)",
-    padding: 18,
-    borderRadius: 20,
-    alignSelf: "flex-start",
-    borderBottomLeftRadius: 5,
+
+  // ── Live chat messages ────────────────────────────────────────────────────
+  msgRow: { marginBottom: 10, maxWidth: "82%" },
+  msgRowOwn: { alignSelf: "flex-end", alignItems: "flex-end" },
+  msgRowOther: { alignSelf: "flex-start", alignItems: "flex-start" },
+  msgBubble: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: Colors.hairline,
   },
-  chatText: { fontFamily: Typography.body, color: Colors.textPrimary, fontSize: 14 },
+  msgBubbleOwn: {
+    backgroundColor: Colors.goldDim,
+    borderColor: Colors.goldBorder,
+    borderBottomRightRadius: 4,
+  },
+  msgBubbleOther: {
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderColor: Colors.hairlineNeutral,
+    borderBottomLeftRadius: 4,
+  },
+  msgText: {
+    fontFamily: Typography.body,
+    fontSize: 14,
+    color: Colors.textPrimary,
+    lineHeight: 20,
+  },
+  msgSender: {
+    fontFamily: Typography.bodyMedium,
+    fontSize: 11,
+    color: Colors.gold,
+    marginBottom: 3,
+  },
+  msgTime: {
+    fontFamily: Typography.bodyLight,
+    fontSize: 10,
+    color: Colors.textMuted,
+    marginTop: 3,
+  },
+  chatEmptyRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    alignSelf: "center",
+    marginTop: 28,
+  },
+  chatEmptyText: {
+    fontFamily: Typography.bodyLight,
+    fontStyle: "italic",
+    fontSize: 13,
+    color: Colors.textMuted,
+  },
+
   chatInputRow: {
     flexDirection: "row",
     gap: 10,
     paddingTop: 15,
+    alignItems: "center",
     borderTopWidth: 1,
     borderTopColor: Colors.hairline,
   },
   chatInput: {
     flex: 1,
     fontFamily: Typography.body,
+    fontSize: 14,
     backgroundColor: Colors.bgInput,
-    borderRadius: 20,
-    paddingHorizontal: 20,
+    borderRadius: 22,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
     borderWidth: 1,
     borderColor: Colors.borderInput,
     color: Colors.textPrimary,
+  },
+  sendBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: Colors.gold,
+    justifyContent: "center",
+    alignItems: "center",
   },
 
   pinBase: {

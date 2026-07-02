@@ -1785,7 +1785,8 @@ export default function MapScreen() {
   ;
 
   const renderFilters = () => (
-    <View style={styles.glassWrapperBottomFull}>
+    <View style={styles.sheetOverlay} pointerEvents="box-none">
+      <View style={styles.glassWrapperBottomFull}>
       <BlurView intensity={90} tint="dark" style={styles.glassPanelBottomFull}>
         <View
           style={{
@@ -2115,10 +2116,9 @@ export default function MapScreen() {
           </View>
         </ScrollView>
       </BlurView>
+      </View>
     </View>
   );
-
-  ;
 
   const renderTutorial = () => {
     switch (tutStep) {

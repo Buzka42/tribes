@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { styles } from './MapStyles';
-import { View, Text, Image, TouchableOpacity, StyleSheet, TextInput, ScrollView, Platform } from 'react-native';
+import { View, Text, Image, TouchableOpacity, TextInput, ScrollView, KeyboardAvoidingView } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { Feather, FontAwesome5 } from '@expo/vector-icons';
 import { Colors, Typography } from '../theme';
@@ -12,7 +12,12 @@ export const CreateTribeWizard = (props: any) => {
   const { wizardDraft, setWizardDraft, wizardStep, setWizardStep, createTribe, setMode, user, formTribeChecked, setFormTribeChecked } = props;
   
     return (
-      <View style={styles.glassWrapperBottomFull}>
+      <KeyboardAvoidingView
+        style={styles.sheetOverlay}
+        behavior="padding"
+        pointerEvents="box-none"
+      >
+        <View style={styles.glassWrapperBottomFull}>
         <BlurView
           intensity={95}
           tint="dark"
@@ -529,7 +534,7 @@ export const CreateTribeWizard = (props: any) => {
             </View>
           )}
         </BlurView>
-      </View>
+        </View>
+      </KeyboardAvoidingView>
     );
-  
 };

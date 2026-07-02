@@ -6,6 +6,7 @@ import { Feather, FontAwesome5 } from '@expo/vector-icons';
 import { Colors, Typography } from '../theme';
 import { SPIRIT_ASSETS, SPIRIT_LABELS } from '../utils/assets';
 import { EVENT_CATEGORIES } from '../data/categories';
+import { notify } from '../utils/dialogs';
 
 export const CreateTribeWizard = (props: any) => {
   const { wizardDraft, setWizardDraft, wizardStep, setWizardStep, createTribe, setMode, user, formTribeChecked, setFormTribeChecked } = props;
@@ -66,6 +67,7 @@ export const CreateTribeWizard = (props: any) => {
               <TextInput
                 style={styles.input}
                 placeholder="e.g. Weekend Warriors"
+                placeholderTextColor={Colors.textPlaceholder}
                 value={wizardDraft.name}
                 onChangeText={(t) =>
                   setWizardDraft({ ...wizardDraft, name: t })
@@ -86,6 +88,7 @@ export const CreateTribeWizard = (props: any) => {
                 style={[styles.input, { height: 80 }]}
                 multiline
                 placeholder="What is this tribe about?"
+                placeholderTextColor={Colors.textPlaceholder}
                 value={wizardDraft.description}
                 onChangeText={(t) =>
                   setWizardDraft({ ...wizardDraft, description: t })
@@ -120,18 +123,22 @@ export const CreateTribeWizard = (props: any) => {
                       marginRight: 8,
                       backgroundColor:
                         wizardDraft.categoryId === cat.id
-                          ? cat.color
-                          : "rgba(255,255,255,0.7)",
+                          ? cat.color + "28"
+                          : Colors.bgInput,
                       borderWidth: 1,
                       borderColor:
-                        wizardDraft.categoryId === cat.id ? cat.color : "#ccc",
+                        wizardDraft.categoryId === cat.id
+                          ? cat.color + "70"
+                          : Colors.hairlineNeutral,
                     }}
                   >
                     <Text
                       style={{
                         color:
-                          wizardDraft.categoryId === cat.id ? "#fff" : "#666",
-                        fontWeight: "bold",
+                          wizardDraft.categoryId === cat.id
+                            ? cat.color
+                            : Colors.textSecondary,
+                        fontFamily: Typography.bodyMedium,
                         fontSize: 13,
                       }}
                     >
@@ -233,7 +240,7 @@ export const CreateTribeWizard = (props: any) => {
                   marginBottom: 20,
                 }}
               >
-                {Object.keys(SPIRIT_ASSETS).map((key) => (
+                {Object.keys(SPIRIT_LABELS).map((key) => (
                   <TouchableOpacity
                     key={key}
                     onPress={() =>
@@ -244,14 +251,14 @@ export const CreateTribeWizard = (props: any) => {
                       aspectRatio: 1,
                       backgroundColor:
                         wizardDraft.spiritId === key
-                          ? "rgba(140,179,105,0.2)"
-                          : "rgba(255,255,255,0.6)",
+                          ? Colors.goldDim
+                          : Colors.bgInput,
                       borderRadius: 20,
-                      borderWidth: 2,
+                      borderWidth: 1,
                       borderColor:
                         wizardDraft.spiritId === key
-                          ? Colors.primary
-                          : "transparent",
+                          ? Colors.gold
+                          : Colors.hairlineNeutral,
                       alignItems: "center",
                       justifyContent: "center",
                       padding: 10,
@@ -270,7 +277,10 @@ export const CreateTribeWizard = (props: any) => {
                       style={{
                         fontSize: 10,
                         fontFamily: Typography.bodyBold,
-                        color: Colors.text,
+                        color:
+                          wizardDraft.spiritId === key
+                            ? Colors.gold
+                            : Colors.textSecondary,
                       }}
                     >
                       {SPIRIT_LABELS[key]}
@@ -331,6 +341,7 @@ export const CreateTribeWizard = (props: any) => {
                   style={{
                     fontFamily: Typography.bodyBold,
                     fontSize: 16,
+                    color: Colors.textPrimary,
                     marginBottom: 10,
                   }}
                 >
@@ -347,11 +358,11 @@ export const CreateTribeWizard = (props: any) => {
                     padding: 10,
                     borderRadius: 12,
                     backgroundColor: !wizardDraft.isPrivateTribe
-                      ? "rgba(140,179,105,0.1)"
+                      ? Colors.goldDim
                       : "transparent",
                     borderWidth: 1,
                     borderColor: !wizardDraft.isPrivateTribe
-                      ? Colors.primary
+                      ? Colors.goldBorder
                       : "transparent",
                   }}
                 >
@@ -361,7 +372,7 @@ export const CreateTribeWizard = (props: any) => {
                       height: 22,
                       borderRadius: 11,
                       borderWidth: 2,
-                      borderColor: Colors.primary,
+                      borderColor: Colors.goldBorder,
                       marginRight: 10,
                       alignItems: "center",
                       justifyContent: "center",
@@ -408,11 +419,11 @@ export const CreateTribeWizard = (props: any) => {
                     padding: 10,
                     borderRadius: 12,
                     backgroundColor: wizardDraft.isPrivateTribe
-                      ? "rgba(140,179,105,0.1)"
+                      ? Colors.goldDim
                       : "transparent",
                     borderWidth: 1,
                     borderColor: wizardDraft.isPrivateTribe
-                      ? Colors.primary
+                      ? Colors.goldBorder
                       : "transparent",
                   }}
                 >
@@ -422,7 +433,7 @@ export const CreateTribeWizard = (props: any) => {
                       height: 22,
                       borderRadius: 11,
                       borderWidth: 2,
-                      borderColor: Colors.primary,
+                      borderColor: Colors.goldBorder,
                       marginRight: 10,
                       alignItems: "center",
                       justifyContent: "center",
@@ -478,16 +489,21 @@ export const CreateTribeWizard = (props: any) => {
               <TouchableOpacity
                 style={styles.btnPrimaryFull}
                 onPress={async () => {
-                  await createTribe(
-                    wizardDraft.name,
-                    wizardDraft.description,
-                    wizardDraft.categoryId,
-                    wizardDraft.spiritId,
-                    wizardDraft.isPrivateTribe,
-                    wizardDraft.fromAttendees,
-                    wizardDraft.categorySub
-                  );
-                  alert("Tribe has been planted! Welcome, Chief.");
+                  try {
+                    await createTribe(
+                      wizardDraft.name,
+                      wizardDraft.description,
+                      wizardDraft.categoryId,
+                      wizardDraft.spiritId,
+                      wizardDraft.isPrivateTribe,
+                      wizardDraft.fromAttendees,
+                      wizardDraft.categorySub
+                    );
+                  } catch (e: any) {
+                    notify('Something went wrong', e.message);
+                    return;
+                  }
+                  notify('Your tribe has been planted', 'Welcome, Chief.');
                   setMode("map");
                   setWizardStep(0);
                   setWizardDraft({
@@ -503,8 +519,11 @@ export const CreateTribeWizard = (props: any) => {
                 }}
               >
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
-                  <Text style={styles.btnPrimaryText}>Found the Tribe</Text>
-                  <Feather name="anchor" size={14} color="rgba(255,255,255,0.9)" />
+                  <Text style={styles.btnPrimaryText}>Plant the Tribe</Text>
+                  <Image
+                    source={require('../assets/leaf.png')}
+                    style={{ width: 15, height: 15, resizeMode: 'contain' }}
+                  />
                 </View>
               </TouchableOpacity>
             </View>

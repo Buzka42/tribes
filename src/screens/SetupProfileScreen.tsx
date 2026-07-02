@@ -19,6 +19,8 @@ export default function SetupProfileScreen() {
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [selectedLoc, setSelectedLoc] = useState<any>(null);
+  const [saving, setSaving] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
   const searchLocation = async (text: string) => {
     setQuery(text);
@@ -34,6 +36,8 @@ export default function SetupProfileScreen() {
 
   const handleFinish = async () => {
     if (!name || (!selectedLoc && !user?.locationName)) return;
+    setErrorMsg('');
+    setSaving(true);
     try {
       await updateDoc(doc(db, 'users', user!.uid), {
         displayName: name,
@@ -45,10 +49,13 @@ export default function SetupProfileScreen() {
           ? { longitude: selectedLoc.center[0], latitude: selectedLoc.center[1] }
           : user?.homeLocation || null,
       });
-    } catch (e) { console.log(e); }
+    } catch (e) {
+      setErrorMsg('Could not save your profile. Check your connection and try again.');
+      setSaving(false);
+    }
   };
 
-  const canContinue = !!name && (!!selectedLoc || !!user?.locationName);
+  const canContinue = !!name && (!!selectedLoc || !!user?.locationName) && !saving;
 
   return (
     <KeyboardAvoidingView
@@ -137,6 +144,9 @@ export default function SetupProfileScreen() {
           <Text style={styles.charCount}>{description.length} / 250</Text>
         )}
 
+        {/* Error */}
+        {!!errorMsg && <Text style={styles.errorText}>{errorMsg}</Text>}
+
         {/* CTA */}
         <TouchableOpacity
           style={[styles.btnPrimary, !canContinue && styles.btnDisabled]}
@@ -144,7 +154,7 @@ export default function SetupProfileScreen() {
           onPress={handleFinish}
           activeOpacity={0.82}
         >
-          <Text style={styles.btnPrimaryText}>Enter The Tribes</Text>
+          <Text style={styles.btnPrimaryText}>{saving ? 'Preparing your path…' : 'Enter The Tribes'}</Text>
         </TouchableOpacity>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -268,6 +278,16 @@ const styles = StyleSheet.create({
   },
   chipTextActive: {
     color: Colors.gold,
+  },
+
+  // ── Error ─────────────────────────────────────────────────────────────────
+  errorText: {
+    fontFamily: Typography.body,
+    fontSize: 13,
+    color: Colors.danger,
+    textAlign: 'center',
+    marginBottom: 14,
+    lineHeight: 18,
   },
 
   // ── CTA ───────────────────────────────────────────────────────────────────

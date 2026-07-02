@@ -41,3 +41,13 @@ yarn-error.*
 /android
 .env
 
+
+# graphify knowledge-graph cache
+graphify-out/cache/
+
+# AI tooling (agent config, skills, generated knowledge graphs)
+.claude/
+.gemini/
+graphify/
+graphify-out/
+graphify.skill

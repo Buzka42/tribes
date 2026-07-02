@@ -22,6 +22,7 @@ import { TribePanel } from '../components/TribePanel';
 import { CreateTribeWizard } from '../components/CreateTribeWizard';
 import { ProfileModal } from '../components/ProfileModal';
 import { format, isToday, isTomorrow, isWeekend, addDays, startOfWeek, endOfWeek, addWeeks } from 'date-fns';
+import { notify } from '../utils/dialogs';
 import { Feather } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { EVENT_CATEGORIES, CategoryGroupId } from '../data/categories';
@@ -115,7 +116,6 @@ export default function MapScreen() {
   >({});
   const [participantNamesCache, setParticipantNamesCache] = useState<Record<string, string>>({});
   const [hasProcessedEventInvite, setHasProcessedEventInvite] = useState(false);
-  const [showTribePrompt, setShowTribePrompt] = useState(false);
 
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
@@ -212,6 +212,16 @@ export default function MapScreen() {
   });
   const userTribes = tribes.filter(t => t.members.includes(user?.uid || ''));
 
+  // Firestore snapshots replace array contents, but selected* state still holds
+  // the object captured at tap time — resolve to the live document so panels
+  // react to joins, applications, and announcements without reopening.
+  const liveSelectedEvent = selectedEvent
+    ? events.find(e => e.id === selectedEvent.id) ?? selectedEvent
+    : null;
+  const liveSelectedTribe = selectedTribe
+    ? tribes.find(t => t.id === selectedTribe.id) ?? selectedTribe
+    : null;
+
   // ── Zoom-aware clustering ─────────────────────────────────────────────────
   const clusteredMarkers = React.useMemo(() => {
     const RADIUS = 0.004 * Math.pow(2, 13 - currentZoom);
@@ -256,26 +266,27 @@ export default function MapScreen() {
 
   // ── Creator stats + feedback + participant names ───────────────────────────
   React.useEffect(() => {
-    if (!selectedEvent || selectedEvent.id === 'tutorial-dummy') return;
-    if (!creatorStatsCache[selectedEvent.creatorId]) {
-      getDoc(doc(db, 'users', selectedEvent.creatorId)).then(snap => {
+    if (!liveSelectedEvent || liveSelectedEvent.id === 'tutorial-dummy') return;
+    const ev = liveSelectedEvent;
+    if (!creatorStatsCache[ev.creatorId]) {
+      getDoc(doc(db, 'users', ev.creatorId)).then(snap => {
         if (snap.exists()) {
           const d = snap.data();
           setCreatorStatsCache(prev => ({
             ...prev,
-            [selectedEvent.creatorId]: { name: d.displayName || 'Unknown', ratingSum: d.ratingSum || 0, ratingCount: d.ratingCount || 0 },
+            [ev.creatorId]: { name: d.displayName || 'Unknown', ratingSum: d.ratingSum || 0, ratingCount: d.ratingCount || 0 },
           }));
         }
       }).catch(() => {});
     }
-    if (userFeedbackCache[selectedEvent.id] === undefined) {
-      getUserFeedback(selectedEvent.id).then(fb => {
-        setUserFeedbackCache(prev => ({ ...prev, [selectedEvent.id]: fb || 'none' }));
+    if (userFeedbackCache[ev.id] === undefined) {
+      getUserFeedback(ev.id).then(fb => {
+        setUserFeedbackCache(prev => ({ ...prev, [ev.id]: fb || 'none' }));
       }).catch(() => {});
     }
-    setFinalizeChecked(selectedEvent.participants?.filter(p => p !== selectedEvent.creatorId) || []);
+    setFinalizeChecked(ev.participants?.filter(p => p !== ev.creatorId) || []);
     setFeedbackAnswer({});
-    (selectedEvent.participants || []).forEach(uid => {
+    (ev.participants || []).forEach(uid => {
       if (!participantNamesCache[uid]) {
         getDoc(doc(db, 'users', uid)).then(snap => {
           if (snap.exists()) {
@@ -285,7 +296,7 @@ export default function MapScreen() {
         }).catch(() => {});
       }
     });
-  }, [selectedEvent?.id]);
+  }, [liveSelectedEvent?.id]);
 
   const markTutorialSeen = async () => {
     if (!user) return;
@@ -314,8 +325,8 @@ export default function MapScreen() {
   };
 
   const handleJoin = async () => {
-    if (!selectedEvent || !user) return;
-    if (selectedEvent.id === 'tutorial-dummy') {
+    if (!liveSelectedEvent || !user) return;
+    if (liveSelectedEvent.id === 'tutorial-dummy') {
       const done = () => { setSelectedEvent(null); setMode('map'); setTutStep(-1); markTutorialSeen(); };
       if (Platform.OS === 'web') {
         window.alert("You've joined your first event! Your 1 Leaf has been refunded since this is a simulation. Welcome to The Tribes.");
@@ -325,11 +336,13 @@ export default function MapScreen() {
       }
       return;
     }
-    if (user.tokens < 1) { Alert.alert('Out of Leaves', 'You need at least 1 Leaf to join. Wait for refunds from past events.'); return; }
+    if (user.tokens < 1) { notify('Out of Leaves', 'You need at least 1 Leaf to join. Refunds arrive after past events are finalized.'); return; }
+    if (liveSelectedEvent.participants.includes(user.uid)) { notify('Already joined', 'You are signed up for this gathering.'); return; }
+    if (liveSelectedEvent.participants.length >= liveSelectedEvent.participantLimit) { notify('This gathering is full', 'The circle has reached its limit. Try another fire on the map.'); return; }
     try {
-      await joinEvent(selectedEvent.id);
-      Alert.alert('Joined', "You've secured your spot. Chat is now unlocked.");
-    } catch (e: any) { Alert.alert('Error', e.message); }
+      await joinEvent(liveSelectedEvent.id);
+      notify("You're in!", 'Your spot is secured and the chat is unlocked.');
+    } catch (e: any) { notify('Something went wrong', e.message); }
   };
 
   // ── Bonfire glow helpers ──────────────────────────────────────────────────
@@ -363,9 +376,9 @@ export default function MapScreen() {
 
   // ── Tribe Management Overlay ──────────────────────────────────────────────
   const renderManagementOverlay = () => {
-    if (!selectedTribe) return null;
-    const isChief = selectedTribe.creatorId === user?.uid;
-    const isLeader = isChief || (selectedTribe.leaders || []).includes(user?.uid || '');
+    if (!liveSelectedTribe) return null;
+    const isChief = liveSelectedTribe.creatorId === user?.uid;
+    const isLeader = isChief || (liveSelectedTribe.leaders || []).includes(user?.uid || '');
     return (
       <KeyboardAvoidingView style={StyleSheet.absoluteFill as any} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <TouchableOpacity
@@ -403,29 +416,29 @@ export default function MapScreen() {
 
           <ScrollView showsVerticalScrollIndicator={false}>
             {/* Pending applicants */}
-            {selectedTribe.pendingApplicants.length > 0 && (
+            {liveSelectedTribe.pendingApplicants.length > 0 && (
               <View style={{ marginBottom: 18, backgroundColor: Colors.glassCardBg, padding: 16, borderRadius: 16, borderWidth: 1, borderColor: Colors.glassCardBorder }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 }}>
                   <Feather name="user-check" size={13} color={Colors.gold} />
                   <Text style={{ fontFamily: Typography.bodyLight, fontSize: 11, color: Colors.gold, letterSpacing: 1.4, textTransform: 'uppercase' }}>
-                    {selectedTribe.pendingApplicants.length} Pending {selectedTribe.pendingApplicants.length === 1 ? 'Application' : 'Applications'}
+                    {liveSelectedTribe.pendingApplicants.length} Pending {liveSelectedTribe.pendingApplicants.length === 1 ? 'Application' : 'Applications'}
                   </Text>
                 </View>
-                {selectedTribe.pendingApplicants.map((appUid: string) => (
+                {liveSelectedTribe.pendingApplicants.map((appUid: string) => (
                   <View key={appUid} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.04)', padding: 13, borderRadius: 12, marginBottom: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' }}>
                     <TouchableOpacity onPress={() => setProfileViewUid(appUid)}>
                       <Text style={{ fontSize: 14, fontFamily: Typography.bodyMedium, color: Colors.textPrimary }}>
-                        {selectedTribe.memberNames?.[appUid] || `Wanderer ${appUid.substring(0, 6)}`}
+                        {liveSelectedTribe.memberNames?.[appUid] || `Wanderer ${appUid.substring(0, 6)}`}
                       </Text>
                     </TouchableOpacity>
                     <View style={{ flexDirection: 'row', gap: 8 }}>
                       <TouchableOpacity
-                        onPress={async () => { try { await rejectApplicant(selectedTribe.id, appUid); Alert.alert('', 'Application rejected.'); } catch { Alert.alert('Error', 'Failed to reject.'); } }}
+                        onPress={async () => { try { await rejectApplicant(liveSelectedTribe.id, appUid); Alert.alert('', 'Application rejected.'); } catch { Alert.alert('Error', 'Failed to reject.'); } }}
                         style={{ backgroundColor: Colors.dangerSoft, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 9999, borderWidth: 1, borderColor: Colors.dangerBorder }}>
                         <Text style={{ fontFamily: Typography.bodyMedium, color: Colors.danger, fontSize: 12 }}>Reject</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
-                        onPress={async () => { try { await acceptApplicant(selectedTribe.id, appUid); Alert.alert('', 'Initiated into the tribe.'); } catch { Alert.alert('Error', 'Failed to accept.'); } }}
+                        onPress={async () => { try { await acceptApplicant(liveSelectedTribe.id, appUid); Alert.alert('', 'Initiated into the tribe.'); } catch { Alert.alert('Error', 'Failed to accept.'); } }}
                         style={{ backgroundColor: Colors.goldDim, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 9999, borderWidth: 1, borderColor: Colors.goldBorder }}>
                         <Text style={{ fontFamily: Typography.bodyMedium, color: Colors.gold, fontSize: 12 }}>Accept</Text>
                       </TouchableOpacity>
@@ -452,7 +465,7 @@ export default function MapScreen() {
               <TouchableOpacity
                 onPress={async () => {
                   if (!announcementText.trim()) return;
-                  await postAnnouncement(selectedTribe.id, announcementText);
+                  await postAnnouncement(liveSelectedTribe.id, announcementText);
                   setAnnouncementText('');
                   setShowManagement(false);
                 }}
@@ -465,24 +478,24 @@ export default function MapScreen() {
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
               <Feather name="users" size={13} color={Colors.gold} />
               <Text style={{ fontFamily: Typography.bodyLight, fontSize: 11, color: Colors.gold, letterSpacing: 1.4, textTransform: 'uppercase' }}>
-                Members ({selectedTribe.members.length})
+                Members ({liveSelectedTribe.members.length})
               </Text>
             </View>
             <View style={{ backgroundColor: Colors.glassCardBg, borderRadius: 16, overflow: 'hidden', marginBottom: 18, borderWidth: 1, borderColor: Colors.glassCardBorder }}>
-              {selectedTribe.members.map((mUid: string, idx: number) => {
-                const mIsLeader = selectedTribe.creatorId === mUid || (selectedTribe.leaders || []).includes(mUid);
-                const mIsChief = selectedTribe.creatorId === mUid;
+              {liveSelectedTribe.members.map((mUid: string, idx: number) => {
+                const mIsLeader = liveSelectedTribe.creatorId === mUid || (liveSelectedTribe.leaders || []).includes(mUid);
+                const mIsChief = liveSelectedTribe.creatorId === mUid;
                 return (
-                  <View key={mUid} style={{ flexDirection: 'row', alignItems: 'center', padding: 13, borderBottomWidth: idx === selectedTribe.members.length - 1 ? 0 : 1, borderBottomColor: 'rgba(255,255,255,0.05)' }}>
+                  <View key={mUid} style={{ flexDirection: 'row', alignItems: 'center', padding: 13, borderBottomWidth: idx === liveSelectedTribe.members.length - 1 ? 0 : 1, borderBottomColor: 'rgba(255,255,255,0.05)' }}>
                     <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: mIsChief ? Colors.goldDim : mIsLeader ? 'rgba(122,143,160,0.20)' : Colors.glassCardBg, borderWidth: 1, borderColor: mIsChief ? Colors.goldBorder : mIsLeader ? 'rgba(122,143,160,0.45)' : Colors.glassCardBorder, justifyContent: 'center', alignItems: 'center', marginRight: 11 }}>
                       <Text style={{ fontFamily: Typography.bodyMedium, color: mIsChief ? Colors.gold : mIsLeader ? '#7A8FA0' : Colors.textSecondary, fontSize: 12 }}>
-                        {selectedTribe.memberNames[mUid]?.charAt(0) || '?'}
+                        {liveSelectedTribe.memberNames[mUid]?.charAt(0) || '?'}
                       </Text>
                     </View>
                     <View style={{ flex: 1 }}>
                       <TouchableOpacity onPress={() => setProfileViewUid(mUid)}>
                         <Text style={{ fontFamily: Typography.bodySemibold, color: '#fff', fontSize: 13, textDecorationLine: 'underline' }}>
-                          {selectedTribe.memberNames[mUid] || 'Unknown'}
+                          {liveSelectedTribe.memberNames[mUid] || 'Unknown'}
                         </Text>
                       </TouchableOpacity>
                       {mIsChief ? (
@@ -493,13 +506,13 @@ export default function MapScreen() {
                     </View>
                     <View style={{ flexDirection: 'row', gap: 4 }}>
                       {isChief && !mIsChief && (
-                        <TouchableOpacity onPress={() => { mIsLeader ? demoteMember(selectedTribe.id, mUid) : promoteMember(selectedTribe.id, mUid); }} style={{ padding: 7 }}>
+                        <TouchableOpacity onPress={() => { mIsLeader ? demoteMember(liveSelectedTribe.id, mUid) : promoteMember(liveSelectedTribe.id, mUid); }} style={{ padding: 7 }}>
                           <Feather name={mIsLeader ? 'shield-off' : 'shield'} size={16} color={mIsLeader ? Colors.textMuted : Colors.gold} />
                         </TouchableOpacity>
                       )}
                       {!mIsChief && (isChief || (isLeader && !mIsLeader)) && (
                         <TouchableOpacity
-                          onPress={() => Alert.alert('Remove Member', `Remove ${selectedTribe.memberNames[mUid]}?`, [{ text: 'Cancel', style: 'cancel' }, { text: 'Remove', style: 'destructive', onPress: () => removeMember(selectedTribe.id, mUid) }])}
+                          onPress={() => Alert.alert('Remove Member', `Remove ${liveSelectedTribe.memberNames[mUid]}?`, [{ text: 'Cancel', style: 'cancel' }, { text: 'Remove', style: 'destructive', onPress: () => removeMember(liveSelectedTribe.id, mUid) }])}
                           style={{ padding: 7 }}>
                           <Feather name="user-x" size={16} color={Colors.danger} />
                         </TouchableOpacity>
@@ -515,7 +528,7 @@ export default function MapScreen() {
               <TouchableOpacity
                 onPress={() => Alert.alert('DANGER', 'Permanently dissolve the tribe?', [
                   { text: 'Cancel', style: 'cancel' },
-                  { text: 'Dissolve', style: 'destructive', onPress: () => { deleteTribe(selectedTribe.id); setSelectedTribe(null); setShowManagement(false); } },
+                  { text: 'Dissolve', style: 'destructive', onPress: () => { deleteTribe(liveSelectedTribe.id); setSelectedTribe(null); setShowManagement(false); } },
                 ])}
                 style={{ backgroundColor: Colors.dangerSoft, height: 56, borderRadius: 9999, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: Colors.dangerBorder }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -815,73 +828,6 @@ export default function MapScreen() {
     </View>
   );
 
-  // ── Event Chat ────────────────────────────────────────────────────────────
-  const renderEventChat = () => {
-    if (!selectedEvent) return null;
-    const isJoined = selectedEvent.participants.includes(user?.uid || '');
-    const isHost = selectedEvent.creatorId === user?.uid;
-    return (
-      <View style={styles.bottomSheetFull}>
-        {/* Header */}
-        <View style={styles.chatHeader}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.chatTitle} numberOfLines={1}>{selectedEvent.title}</Text>
-            <Text style={styles.chatSub}>{selectedEvent.participants.length} / {selectedEvent.participantLimit} attending · {selectedEvent.time ? format(new Date(selectedEvent.time), 'MMM d, h:mm a') : 'TBD'}</Text>
-          </View>
-          {isHost && (
-            <TouchableOpacity onPress={async () => {
-              if (selectedEvent.id === 'tutorial-dummy') { setSelectedEvent(null); setMode('map'); return; }
-              const del = async () => { try { await deleteEvent(selectedEvent.id); setSelectedEvent(null); setMode('map'); Alert.alert('Removed', 'Event deleted. 5 Leaves refunded.'); } catch (e: any) { Alert.alert('Error', e.message); } };
-              if (Platform.OS === 'web') { if (window.confirm('Cancel this event?')) del(); }
-              else Alert.alert('Delete Event', 'Cancel this event?', [{ text: 'No' }, { text: 'Yes', style: 'destructive', onPress: del }]);
-            }} style={{ padding: 8, marginRight: 4 }}>
-              <Feather name="trash-2" size={17} color={Colors.danger} />
-            </TouchableOpacity>
-          )}
-          <TouchableOpacity onPress={() => { setSelectedEvent(null); setMode('map'); }} style={{ padding: 8 }}>
-            <Feather name="x" size={20} color={Colors.textSecondary} />
-          </TouchableOpacity>
-        </View>
-
-        {/* Location line */}
-        <View style={styles.chatLocRow}>
-          <Feather name="map-pin" size={11} color={Colors.gold} />
-          <Text style={styles.chatLoc} numberOfLines={1}>{selectedEvent.location.address || 'Precise location pinned on map'}</Text>
-        </View>
-
-        {/* Locked / open */}
-        {!isJoined && !isHost ? (
-          <View style={styles.chatLocked}>
-            <View style={styles.lockIconWrap}>
-              <Feather name="lock" size={26} color={Colors.gold} />
-            </View>
-            <Text style={styles.chatLockedTitle}>Tribal Chat is Sealed</Text>
-            <Text style={styles.chatLockedSub}>Commit 1 Leaf to join this gathering.</Text>
-            <TouchableOpacity style={styles.btnPrimaryFull} onPress={handleJoin}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Text style={styles.btnPrimaryFullText}>Join · 1</Text>
-                <Image source={LEAF} style={styles.btnLeafDark} />
-              </View>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <View style={styles.chatOpen}>
-            <ScrollView style={styles.chatScroll} contentContainerStyle={{ paddingVertical: 12, paddingBottom: 20 }}>
-              <View style={styles.chatBubble}>
-                <Text style={styles.chatBubbleText}>Welcome to the gathering. See you there.</Text>
-              </View>
-            </ScrollView>
-            <View style={styles.chatInputRow}>
-              <TextInput style={styles.chatInput} placeholder="Send a message…" placeholderTextColor={Colors.textPlaceholder} />
-              <TouchableOpacity style={styles.sendBtn}>
-                <Feather name="send" size={15} color="#1A2421" />
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-      </View>
-    );
-  };
 
   // ── Filters ───────────────────────────────────────────────────────────────
   const renderFilters = () => (
@@ -1178,9 +1124,9 @@ export default function MapScreen() {
       {renderDevTools()}
       {mode === 'wizard_details' && renderWizardDetails()}
       {mode === 'wizard_location' && renderWizardLocation()}
-      {mode === 'event_chat' && <EventChat selectedEvent={selectedEvent} setSelectedEvent={setSelectedEvent} setMode={setMode} user={user} events={events} joinEvent={joinEvent} deleteEvent={deleteEvent} finalizeEvent={finalizeEvent} finalizeChecked={finalizeChecked} setFinalizeChecked={setFinalizeChecked} submitFeedback={submitFeedback} feedbackAnswer={feedbackAnswer} setFeedbackAnswer={setFeedbackAnswer} feedbackSubmitted={feedbackSubmitted} setFeedbackSubmitted={setFeedbackSubmitted} getUserFeedback={getUserFeedback} userFeedbackCache={userFeedbackCache} setUserFeedbackCache={setUserFeedbackCache} creatorStatsCache={creatorStatsCache} setCreatorStatsCache={setCreatorStatsCache} participantNamesCache={participantNamesCache} setParticipantNamesCache={setParticipantNamesCache} tribes={tribes} setProfileViewUid={setProfileViewUid} setSelectedTribe={setSelectedTribe} handleJoin={handleJoin} setFormTribeChecked={setFormTribeChecked} formTribeChecked={formTribeChecked} setWizardDraft={setWizardDraft} setWizardStep={setWizardStep} />}
+      {mode === 'event_chat' && <EventChat selectedEvent={liveSelectedEvent} setSelectedEvent={setSelectedEvent} setMode={setMode} user={user} events={events} joinEvent={joinEvent} deleteEvent={deleteEvent} finalizeEvent={finalizeEvent} finalizeChecked={finalizeChecked} setFinalizeChecked={setFinalizeChecked} submitFeedback={submitFeedback} feedbackAnswer={feedbackAnswer} setFeedbackAnswer={setFeedbackAnswer} feedbackSubmitted={feedbackSubmitted} setFeedbackSubmitted={setFeedbackSubmitted} getUserFeedback={getUserFeedback} userFeedbackCache={userFeedbackCache} setUserFeedbackCache={setUserFeedbackCache} creatorStatsCache={creatorStatsCache} setCreatorStatsCache={setCreatorStatsCache} participantNamesCache={participantNamesCache} setParticipantNamesCache={setParticipantNamesCache} tribes={tribes} setProfileViewUid={setProfileViewUid} setSelectedTribe={setSelectedTribe} handleJoin={handleJoin} setFormTribeChecked={setFormTribeChecked} formTribeChecked={formTribeChecked} setWizardDraft={setWizardDraft} setWizardStep={setWizardStep} />}
       {mode === 'filters' && renderFilters()}
-      {mode === 'tribe_panel' && <TribePanel selectedTribe={selectedTribe} setSelectedTribe={setSelectedTribe} user={user} applyToTribe={applyToTribe} leaveTribe={leaveTribe} showManagement={showManagement} setShowManagement={setShowManagement} announcementText={announcementText} setAnnouncementText={setAnnouncementText} postAnnouncement={postAnnouncement} acceptApplicant={acceptApplicant} rejectApplicant={rejectApplicant} removeMember={removeMember} deleteTribe={deleteTribe} updateTribe={updateTribe} promoteMember={promoteMember} demoteMember={demoteMember} events={events} setMode={setMode} setSelectedEvent={setSelectedEvent} setDraft={setDraft} draft={draft} setProfileViewUid={setProfileViewUid} renderManagementOverlay={renderManagementOverlay} />}
+      {mode === 'tribe_panel' && <TribePanel selectedTribe={liveSelectedTribe} setSelectedTribe={setSelectedTribe} user={user} applyToTribe={applyToTribe} leaveTribe={leaveTribe} showManagement={showManagement} setShowManagement={setShowManagement} announcementText={announcementText} setAnnouncementText={setAnnouncementText} postAnnouncement={postAnnouncement} acceptApplicant={acceptApplicant} rejectApplicant={rejectApplicant} removeMember={removeMember} deleteTribe={deleteTribe} updateTribe={updateTribe} promoteMember={promoteMember} demoteMember={demoteMember} events={events} setMode={setMode} setSelectedEvent={setSelectedEvent} setDraft={setDraft} draft={draft} setProfileViewUid={setProfileViewUid} renderManagementOverlay={renderManagementOverlay} />}
       {mode === 'create_tribe_wizard' && <CreateTribeWizard wizardDraft={wizardDraft} setWizardDraft={setWizardDraft} wizardStep={wizardStep} setWizardStep={setWizardStep} createTribe={createTribe} setMode={setMode} user={user} formTribeChecked={formTribeChecked} setFormTribeChecked={setFormTribeChecked} />}
       {profileViewUid && <ProfileModal profileViewData={profileViewData} profileViewUid={profileViewUid} setProfileViewUid={setProfileViewUid} setProfileViewData={setProfileViewData} />}
       {renderMapSearch()}

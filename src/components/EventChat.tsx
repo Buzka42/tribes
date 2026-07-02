@@ -1,11 +1,12 @@
 import { format } from 'date-fns';
-import React, { useState } from 'react';
+import React from 'react';
 import { styles } from './MapStyles';
-import { View, Text, Image, TouchableOpacity, StyleSheet, TextInput, ScrollView, Platform, KeyboardAvoidingView } from 'react-native';
+import { View, Text, Image, TouchableOpacity, TextInput, ScrollView, Platform, KeyboardAvoidingView, Share } from 'react-native';
 import { BlurView } from 'expo-blur';
-import { Feather, FontAwesome, Ionicons } from '@expo/vector-icons';
+import { Feather } from '@expo/vector-icons';
 import { Colors, Typography } from '../theme';
 import { renderMoons, SPIRIT_ASSETS } from '../utils/assets';
+import { notify, confirmDialog } from '../utils/dialogs';
 
 export const EventChat = (props: any) => {
   const { selectedEvent, setSelectedEvent, setMode, user, events, joinEvent, leaveEvent, deleteEvent, finalizeEvent, finalizeChecked, setFinalizeChecked, submitFeedback, feedbackAnswer, setFeedbackAnswer, feedbackSubmitted, setFeedbackSubmitted, getUserFeedback, userFeedbackCache, setUserFeedbackCache, creatorStatsCache, setCreatorStatsCache, participantNamesCache, setParticipantNamesCache, getParticipantNames, tribes, setProfileViewUid, setSelectedTribe, handleJoin, setFormTribeChecked, formTribeChecked, setWizardDraft, setWizardStep } = props;
@@ -70,17 +71,20 @@ export const EventChat = (props: any) => {
                 {isPrivateTribe && (
                   <View
                     style={{
-                      backgroundColor: "rgba(0,0,0,0.8)",
+                      backgroundColor: Colors.goldDim,
                       paddingHorizontal: 8,
                       paddingVertical: 4,
                       borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: Colors.goldBorder,
                     }}
                   >
                     <Text
                       style={{
-                        color: "#fff",
+                        color: Colors.gold,
                         fontSize: 10,
-                        fontWeight: "bold",
+                        fontFamily: Typography.bodyMedium,
+                        letterSpacing: 0.6,
                       }}
                     >
                       PRIVATE TRIBE
@@ -154,13 +158,13 @@ export const EventChat = (props: any) => {
                     flexDirection: "row",
                     alignItems: "center",
                     marginTop: 8,
-                    backgroundColor: "rgba(140,179,105,0.15)",
+                    backgroundColor: Colors.goldDim,
                     alignSelf: "flex-start",
                     paddingHorizontal: 10,
                     paddingVertical: 6,
                     borderRadius: 16,
                     borderWidth: 1,
-                    borderColor: "rgba(140,179,105,0.3)",
+                    borderColor: Colors.goldBorder,
                   }}
                 >
                   <Image
@@ -180,13 +184,23 @@ export const EventChat = (props: any) => {
               )}
               {selectedEvent.isPrivate && (isHost || isJoined) && (
                 <TouchableOpacity
-                  onPress={() => {
-                    const link = `${window.location.origin}${window.location.pathname}?joinEvent=${selectedEvent.id}`;
-                    navigator.clipboard?.writeText(link).then(() => {
-                      window.alert("Invite link copied!");
-                    }).catch(() => {
-                      window.prompt("Copy this invite link:", link);
-                    });
+                  onPress={async () => {
+                    if (Platform.OS === 'web') {
+                      const link = `${window.location.origin}${window.location.pathname}?joinEvent=${selectedEvent.id}`;
+                      try {
+                        await navigator.clipboard.writeText(link);
+                        notify('Invite link copied');
+                      } catch {
+                        window.prompt('Copy this invite link:', link);
+                      }
+                    } else {
+                      try {
+                        await Share.share({
+                          message: `Join "${selectedEvent.title}" on Tribes! Event code: ${selectedEvent.id}`,
+                          title: selectedEvent.title,
+                        });
+                      } catch { /* user dismissed share sheet */ }
+                    }
                   }}
                   style={{
                     flexDirection: "row",
@@ -217,17 +231,19 @@ export const EventChat = (props: any) => {
                     setMode("map");
                     return;
                   }
-                  if (
-                    window.confirm(
-                      "Are you sure you want to cancel this event? 5 leaves will be refunded.",
-                    )
-                  ) {
+                  const ok = await confirmDialog(
+                    'Cancel this gathering?',
+                    'Your 5 Leaves will be refunded and participants get theirs back.',
+                    'Cancel Event',
+                    true,
+                  );
+                  if (ok) {
                     try {
                       await deleteEvent(selectedEvent.id);
                       setSelectedEvent(null);
                       setMode("map");
                     } catch (e: any) {
-                      alert("Error: " + e.message);
+                      notify('Something went wrong', e.message);
                     }
                   }
                 }}
@@ -246,23 +262,28 @@ export const EventChat = (props: any) => {
               <Feather name="x" size={22} color={Colors.text} />
             </TouchableOpacity>
           </View>
-          <Text
-            style={{
-              fontFamily: Typography.body,
-              fontSize: 13,
-              color: Colors.textLight,
-              marginBottom: 12,
-            }}
-            numberOfLines={1}
-          >
-            📍 {selectedEvent.location.address || "Precise map location pinned"}
-          </Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 12 }}>
+            <Feather name="map-pin" size={12} color={Colors.gold} />
+            <Text
+              style={{
+                fontFamily: Typography.body,
+                fontSize: 13,
+                color: Colors.textLight,
+                flex: 1,
+              }}
+              numberOfLines={1}
+            >
+              {selectedEvent.location.address || "Precise map location pinned"}
+            </Text>
+          </View>
 
           {/* Content Area */}
           {!isJoined && !isHost ? (
             <View style={styles.chatLocked}>
-              <Text style={styles.chatLockedIco}>💬</Text>
-              <Text style={styles.chatLockedTitle}>Tribal Chat is Locked</Text>
+              <View style={styles.chatLockedIconWrap}>
+                <Feather name="lock" size={24} color={Colors.gold} />
+              </View>
+              <Text style={styles.chatLockedTitle}>Tribal Chat is Sealed</Text>
               <Text style={styles.chatLockedSub}>
                 Commit 1{" "}
                 <Image
@@ -312,19 +333,18 @@ export const EventChat = (props: any) => {
                     borderColor: Colors.accent,
                   }}
                 >
-                  <Text
-                    style={{
-                      fontFamily: Typography.heading,
-                      fontSize: 16,
-                      color: Colors.accent,
-                      marginBottom: 8,
-                    }}
-                  >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
-                      <Feather name="zap" size={14} color={Colors.gold} />
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 8 }}>
+                    <Feather name="zap" size={14} color={Colors.gold} />
+                    <Text
+                      style={{
+                        fontFamily: Typography.heading,
+                        fontSize: 16,
+                        color: Colors.accent,
+                      }}
+                    >
                       The Event Has Passed
-                    </View>
-                  </Text>
+                    </Text>
+                  </View>
                   <Text
                     style={{
                       fontFamily: Typography.body,
@@ -404,10 +424,10 @@ export const EventChat = (props: any) => {
                                   borderRadius: 12,
                                   borderWidth: 2,
                                   borderColor: finalizeChecked.includes(p)
-                                    ? Colors.primary
-                                    : "#ddd",
+                                    ? Colors.gold
+                                    : Colors.hairlineNeutral,
                                   backgroundColor: finalizeChecked.includes(p)
-                                    ? Colors.primary
+                                    ? Colors.goldDim
                                     : "transparent",
                                   marginRight: 10,
                                   alignItems: "center",
@@ -418,7 +438,7 @@ export const EventChat = (props: any) => {
                                   <Feather
                                     name="check"
                                     size={14}
-                                    color="#fff"
+                                    color={Colors.gold}
                                   />
                                 )}
                               </View>
@@ -440,7 +460,7 @@ export const EventChat = (props: any) => {
                       style={{ flexDirection: "row", alignItems: "center", marginBottom: 15 }}
                     >
                       <View style={{ width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: formTribeChecked ? Colors.gold : Colors.hairline, backgroundColor: formTribeChecked ? Colors.goldDim : "transparent", alignItems: "center", justifyContent: "center", marginRight: 10 }}>
-                        {formTribeChecked && <Feather name="check" size={14} color="#fff" />}
+                        {formTribeChecked && <Feather name="check" size={14} color={Colors.gold} />}
                       </View>
                       <Text style={{ fontFamily: Typography.bodySemibold, color: Colors.text }}>
                         Form a permanent Tribe from these attendees
@@ -478,7 +498,7 @@ export const EventChat = (props: any) => {
                       } else {
                         setSelectedEvent(null);
                         setMode("map");
-                        alert("Event Finalized! Leaves refunded.");
+                        notify('Event finalized', 'Your Leaves have been refunded.');
                       }
                     }}
                   >
@@ -506,19 +526,18 @@ export const EventChat = (props: any) => {
                       borderColor: Colors.accent,
                     }}
                   >
-                    <Text
-                      style={{
-                        fontFamily: Typography.heading,
-                        fontSize: 16,
-                        color: Colors.accent,
-                        marginBottom: 8,
-                      }}
-                    >
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
-                        <Feather name="tag" size={14} color={Colors.gold} />
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 8 }}>
+                      <Feather name="tag" size={14} color={Colors.gold} />
+                      <Text
+                        style={{
+                          fontFamily: Typography.heading,
+                          fontSize: 16,
+                          color: Colors.accent,
+                        }}
+                      >
                         Claim Your Leaf Back
-                      </View>
-                    </Text>
+                      </Text>
+                    </View>
                     <Text
                       style={{
                         fontFamily: Typography.body,
@@ -635,7 +654,7 @@ export const EventChat = (props: any) => {
                           ...prev,
                           [selectedEvent.id]: true,
                         }));
-                        alert("Feedback submitted. 1 leaf refunded!");
+                        notify('Feedback received', '1 Leaf returned to your pouch.');
                         setSelectedEvent(null);
                         setMode("map");
                       }}
@@ -652,8 +671,8 @@ export const EventChat = (props: any) => {
                 <View style={styles.chatInputRow}>
                   <TextInput
                     style={styles.chatInput}
-                    placeholder="Send a scroll..."
-                    placeholderTextColor="#bbb"
+                    placeholder="Send a message…"
+                    placeholderTextColor={Colors.textPlaceholder}
                   />
                   <TouchableOpacity style={styles.btnPrimary}>
                     <Text style={styles.btnPrimaryText}>Send</Text>

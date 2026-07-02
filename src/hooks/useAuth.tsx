@@ -41,12 +41,15 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
             await setDoc(docRef, newUser);
             setUser(newUser);
           }
+          // Only settle loading once the profile is known — prevents a flash
+          // of the profile-setup screen while the first snapshot is in flight
+          setLoading(false);
         });
       } else {
         if (unsubscribeUser) unsubscribeUser();
         setUser(null);
+        setLoading(false);
       }
-      setLoading(false);
     });
     return () => {
       unsub();

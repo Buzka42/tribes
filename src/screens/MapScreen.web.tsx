@@ -28,6 +28,7 @@ import { EventChat } from '../components/EventChat';
 import { TribePanel } from '../components/TribePanel';
 import { CreateTribeWizard } from '../components/CreateTribeWizard';
 import { ProfileModal } from '../components/ProfileModal';
+import { styles } from '../components/MapStyles';
 import {
   format,
   isToday,
@@ -41,6 +42,7 @@ import {
 import { Feather } from "@expo/vector-icons";
 import { EVENT_CATEGORIES, CategoryGroupId } from "../data/categories";
 import { SPIRIT_ASSETS, SPIRIT_LABELS, renderMoons } from "../utils/assets";
+import { notify } from "../utils/dialogs";
 
 import Map, { Marker, Layer, Source, MapMouseEvent } from "react-map-gl/mapbox";
 import mapboxgl from "mapbox-gl";
@@ -175,7 +177,6 @@ export default function MapScreen() {
   >({});
   const [participantNamesCache, setParticipantNamesCache] = useState<Record<string, string>>({});
   const [hasProcessedEventInvite, setHasProcessedEventInvite] = useState(false);
-  const [showTribePrompt, setShowTribePrompt] = useState(false);
 
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
@@ -291,6 +292,16 @@ export default function MapScreen() {
   });
   const userTribes = tribes.filter((t) => t.members.includes(user?.uid || ""));
 
+  // Firestore snapshots replace array contents, but selected* state still holds
+  // the object captured at tap time — resolve to the live document so panels
+  // react to joins, applications, and announcements without reopening.
+  const liveSelectedEvent = selectedEvent
+    ? events.find((e) => e.id === selectedEvent.id) ?? selectedEvent
+    : null;
+  const liveSelectedTribe = selectedTribe
+    ? tribes.find((t) => t.id === selectedTribe.id) ?? selectedTribe
+    : null;
+
   // Load creator stats + feedback when event chat opens
   React.useEffect(() => {
     if (typeof window !== "undefined" && !hasProcessedInvite && tribes.length > 0) {
@@ -340,16 +351,16 @@ export default function MapScreen() {
   }, [profileViewUid]);
 
   React.useEffect(() => {
-    if (!selectedEvent || selectedEvent.id === "tutorial-dummy") return;
+    if (!liveSelectedEvent || liveSelectedEvent.id === "tutorial-dummy") return;
     // Creator stats
-    if (!creatorStatsCache[selectedEvent.creatorId]) {
-      getDoc(doc(db, "users", selectedEvent.creatorId))
+    if (!creatorStatsCache[liveSelectedEvent.creatorId]) {
+      getDoc(doc(db, "users", liveSelectedEvent.creatorId))
         .then((snap) => {
           if (snap.exists()) {
             const d = snap.data();
             setCreatorStatsCache((prev) => ({
               ...prev,
-              [selectedEvent.creatorId]: {
+              [liveSelectedEvent.creatorId]: {
                 name: d.displayName || "Unknown",
                 ratingSum: d.ratingSum || 0,
                 ratingCount: d.ratingCount || 0,
@@ -360,25 +371,25 @@ export default function MapScreen() {
         .catch(() => {});
     }
     // User feedback
-    if (userFeedbackCache[selectedEvent.id] === undefined) {
-      getUserFeedback(selectedEvent.id)
+    if (userFeedbackCache[liveSelectedEvent.id] === undefined) {
+      getUserFeedback(liveSelectedEvent.id)
         .then((fb) => {
           setUserFeedbackCache((prev) => ({
             ...prev,
-            [selectedEvent.id]: fb || "none",
+            [liveSelectedEvent.id]: fb || "none",
           }));
         })
         .catch(() => {});
     }
     // Init finalize checkboxes
     setFinalizeChecked(
-      selectedEvent.participants?.filter(
-        (p) => p !== selectedEvent.creatorId,
+      liveSelectedEvent.participants?.filter(
+        (p) => p !== liveSelectedEvent.creatorId,
       ) || [],
     );
     setFeedbackAnswer({});
     // Fetch display names for all participants
-    (selectedEvent.participants || []).forEach((uid) => {
+    (liveSelectedEvent.participants || []).forEach((uid) => {
       if (!participantNamesCache[uid]) {
         getDoc(doc(db, "users", uid))
           .then((snap) => {
@@ -393,7 +404,7 @@ export default function MapScreen() {
           .catch(() => {});
       }
     });
-  }, [selectedEvent?.id]);
+  }, [liveSelectedEvent?.id]);
 
   // --- CLUSTERING (zoom-aware) ---
   const clusteredMarkers = React.useMemo(() => {
@@ -505,18 +516,15 @@ export default function MapScreen() {
         tribeId: "",
         cyclicalRule: "",
       });
-      Alert.alert(
-        "Tribe Assembled",
-        "Your event is live. 5 Leaves were locked.",
-      );
+      notify("Your gathering is live", "5 Leaves were staked. They return when you finalize the event.");
     } catch (err: any) {
-      Alert.alert("Error", err.message);
+      notify("Something went wrong", err.message);
     }
   };
 
   const handleJoin = async () => {
-    if (!selectedEvent || !user) return;
-    if (selectedEvent.id === "tutorial-dummy") {
+    if (!liveSelectedEvent || !user) return;
+    if (liveSelectedEvent.id === "tutorial-dummy") {
       if (Platform.OS === "web") {
         window.alert(
           "Congratulations! 🌟\n\nYou successfully joined your first event! Since this is a test simulation, your 1 Leaf 🍃 has been instantly refunded. Welcome to The Tribes!",
@@ -544,20 +552,22 @@ export default function MapScreen() {
       return;
     }
     if (user.tokens < 1) {
-      if (typeof window !== "undefined") {
-        window.alert("Out of Leaves! 🍂\nYou need at least 1 leaf to join. Wait for refunds from past events.");
-      }
+      window.alert("Out of Leaves\n\nYou need at least 1 Leaf to join. Refunds arrive after past events are finalized.");
       return;
     }
-    if (selectedEvent.participants.includes(user.uid)) {
-      if (typeof window !== "undefined") window.alert("You are already signed up for this event!");
+    if (liveSelectedEvent.participants.includes(user.uid)) {
+      window.alert("You are already signed up for this event.");
+      return;
+    }
+    if (liveSelectedEvent.participants.length >= liveSelectedEvent.participantLimit) {
+      window.alert("This gathering is full\n\nThe circle has reached its limit. Try another fire on the map.");
       return;
     }
     try {
-      await joinEvent(selectedEvent.id);
-      if (typeof window !== "undefined") window.alert("Joined! You've secured your spot. Chat is now unlocked!");
+      await joinEvent(liveSelectedEvent.id);
+      window.alert("You're in! Your spot is secured and the chat is unlocked.");
     } catch (e: any) {
-      if (typeof window !== "undefined") window.alert("Error: " + e.message);
+      window.alert("Error: " + e.message);
     }
   };
 
@@ -619,10 +629,10 @@ export default function MapScreen() {
   };
 
   const renderManagementOverlay = () => {
-    if (!selectedTribe) return null;
-    const isChief = selectedTribe.creatorId === user?.uid;
+    if (!liveSelectedTribe) return null;
+    const isChief = liveSelectedTribe.creatorId === user?.uid;
     const isLeader =
-      isChief || (selectedTribe.leaders || []).includes(user?.uid || "");
+      isChief || (liveSelectedTribe.leaders || []).includes(user?.uid || "");
     return (
       <View style={StyleSheet.absoluteFill}>
         <TouchableOpacity
@@ -689,7 +699,7 @@ export default function MapScreen() {
             </TouchableOpacity>
           </View>
           <ScrollView showsVerticalScrollIndicator={false}>
-            {selectedTribe.pendingApplicants.length > 0 && (
+            {liveSelectedTribe.pendingApplicants.length > 0 && (
               <View
                 style={{
                   marginBottom: 18,
@@ -711,10 +721,10 @@ export default function MapScreen() {
                       textTransform: 'uppercase',
                     }}
                   >
-                    {selectedTribe.pendingApplicants.length} Pending {selectedTribe.pendingApplicants.length === 1 ? 'Application' : 'Applications'}
+                    {liveSelectedTribe.pendingApplicants.length} Pending {liveSelectedTribe.pendingApplicants.length === 1 ? 'Application' : 'Applications'}
                   </Text>
                 </View>
-                {selectedTribe.pendingApplicants.map((appUid) => (
+                {liveSelectedTribe.pendingApplicants.map((appUid) => (
                   <View
                     key={appUid}
                     style={{
@@ -737,14 +747,14 @@ export default function MapScreen() {
                           color: Colors.textPrimary,
                         }}
                       >
-                        {selectedTribe.memberNames?.[appUid] || `Wanderer ${appUid.substring(0, 6)}`}
+                        {liveSelectedTribe.memberNames?.[appUid] || `Wanderer ${appUid.substring(0, 6)}`}
                       </Text>
                     </TouchableOpacity>
                     <View style={{ flexDirection: "row", gap: 8 }}>
                       <TouchableOpacity
                         onPress={async () => {
                           try {
-                            await rejectApplicant(selectedTribe.id, appUid);
+                            await rejectApplicant(liveSelectedTribe.id, appUid);
                             if (typeof window !== 'undefined') window.alert("Application rejected.");
                           } catch (e) {
                             if (typeof window !== 'undefined') window.alert("Failed to reject application.");
@@ -772,7 +782,7 @@ export default function MapScreen() {
                       <TouchableOpacity
                         onPress={async () => {
                           try {
-                            await acceptApplicant(selectedTribe.id, appUid);
+                            await acceptApplicant(liveSelectedTribe.id, appUid);
                             if (typeof window !== 'undefined') window.alert("Initiated into the tribe.");
                           } catch (e) {
                             if (typeof window !== 'undefined') window.alert("Failed to accept applicant.");
@@ -848,7 +858,7 @@ export default function MapScreen() {
               <TouchableOpacity
                 onPress={async () => {
                   if (!announcementText.trim()) return;
-                  await postAnnouncement(selectedTribe.id, announcementText);
+                  await postAnnouncement(liveSelectedTribe.id, announcementText);
                   setAnnouncementText("");
                   setShowManagement(false);
                 }}
@@ -885,7 +895,7 @@ export default function MapScreen() {
                   textTransform: 'uppercase',
                 }}
               >
-                Members ({selectedTribe.members.length})
+                Members ({liveSelectedTribe.members.length})
               </Text>
             </View>
             <View
@@ -898,11 +908,11 @@ export default function MapScreen() {
                 borderColor: Colors.glassCardBorder,
               }}
             >
-              {selectedTribe.members.map((mUid, idx) => {
+              {liveSelectedTribe.members.map((mUid, idx) => {
                 const mIsLeader =
-                  selectedTribe.creatorId === mUid ||
-                  (selectedTribe.leaders || []).includes(mUid);
-                const mIsChief = selectedTribe.creatorId === mUid;
+                  liveSelectedTribe.creatorId === mUid ||
+                  (liveSelectedTribe.leaders || []).includes(mUid);
+                const mIsChief = liveSelectedTribe.creatorId === mUid;
                 return (
                   <View
                     key={mUid}
@@ -911,7 +921,7 @@ export default function MapScreen() {
                       alignItems: "center",
                       padding: 13,
                       borderBottomWidth:
-                        idx === selectedTribe.members.length - 1 ? 0 : 1,
+                        idx === liveSelectedTribe.members.length - 1 ? 0 : 1,
                       borderBottomColor: "rgba(255,255,255,0.05)",
                     }}
                   >
@@ -943,7 +953,7 @@ export default function MapScreen() {
                           fontSize: 12,
                         }}
                       >
-                        {selectedTribe.memberNames[mUid]?.charAt(0) || "?"}
+                        {liveSelectedTribe.memberNames[mUid]?.charAt(0) || "?"}
                       </Text>
                     </View>
                     <View style={{ flex: 1 }}>
@@ -956,7 +966,7 @@ export default function MapScreen() {
                             textDecorationLine: "underline",
                           }}
                         >
-                          {selectedTribe.memberNames[mUid] || "Unknown"}
+                          {liveSelectedTribe.memberNames[mUid] || "Unknown"}
                         </Text>
                       </TouchableOpacity>
                       {mIsChief ? (
@@ -973,8 +983,8 @@ export default function MapScreen() {
                       {isChief && !mIsChief && (
                         <TouchableOpacity
                           onPress={() => {
-                            if (mIsLeader) demoteMember(selectedTribe.id, mUid);
-                            else promoteMember(selectedTribe.id, mUid);
+                            if (mIsLeader) demoteMember(liveSelectedTribe.id, mUid);
+                            else promoteMember(liveSelectedTribe.id, mUid);
                           }}
                           style={{ padding: 7 }}
                         >
@@ -994,10 +1004,10 @@ export default function MapScreen() {
                           onPress={() => {
                             if (
                               window.confirm(
-                                `Remove ${selectedTribe.memberNames[mUid]}?`,
+                                `Remove ${liveSelectedTribe.memberNames[mUid]}?`,
                               )
                             )
-                              removeMember(selectedTribe.id, mUid);
+                              removeMember(liveSelectedTribe.id, mUid);
                           }}
                           style={{ padding: 7 }}
                         >
@@ -1019,7 +1029,7 @@ export default function MapScreen() {
                   if (
                     window.confirm("DANGER: Permanently dissolve the tribe?")
                   ) {
-                    deleteTribe(selectedTribe.id);
+                    deleteTribe(liveSelectedTribe.id);
                     setSelectedTribe(null);
                     setShowManagement(false);
                   }
@@ -1246,7 +1256,7 @@ export default function MapScreen() {
                 <Feather
                   name="chevron-right"
                   size={16}
-                  color={Colors.primaryDark}
+                  color="rgba(255,255,255,0.75)"
                 />
               </TouchableOpacity>
             )}
@@ -1367,7 +1377,9 @@ export default function MapScreen() {
                     style={{
                       fontFamily: Typography.bodySemibold,
                       fontSize: 14,
+                      color: Colors.textPrimary,
                     }}
+                    numberOfLines={1}
                   >
                     {feat.place_name}
                   </Text>
@@ -1522,7 +1534,7 @@ export default function MapScreen() {
                 <Text
                   style={[
                     styles.wizardSubCatText,
-                    draft.ageGroup === age && { color: "#fff" },
+                    draft.ageGroup === age && { color: Colors.gold },
                   ]}
                 >
                   {age}
@@ -1564,7 +1576,7 @@ export default function MapScreen() {
               <Text
                 style={[
                   styles.wizardSubCatText,
-                  draft.gender === gender && { color: "#fff" },
+                  draft.gender === gender && { color: Colors.gold },
                 ]}
               >
                 {gender}
@@ -1663,7 +1675,7 @@ export default function MapScreen() {
                   styles.wizardSubCatText,
                   (draft.cyclicalRule === rule ||
                     (rule === "once" && !draft.cyclicalRule)) && {
-                    color: "#fff",
+                    color: Colors.gold,
                   },
                 ]}
               >
@@ -1697,8 +1709,8 @@ export default function MapScreen() {
             ]}
             onPress={() => setDraft({ ...draft, isPrivate: false })}
           >
-            <Feather name="globe" size={13} color={!draft.isPrivate ? "#fff" : Colors.text} />
-            <Text style={[styles.wizardSubCatText, !draft.isPrivate && { color: "#fff" }]}>Public</Text>
+            <Feather name="globe" size={13} color={!draft.isPrivate ? Colors.gold : Colors.textSecondary} />
+            <Text style={[styles.wizardSubCatText, !draft.isPrivate && { color: Colors.gold }]}>Public</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[
@@ -1708,8 +1720,8 @@ export default function MapScreen() {
             ]}
             onPress={() => setDraft({ ...draft, isPrivate: true })}
           >
-            <Feather name="lock" size={13} color={draft.isPrivate ? "#fff" : Colors.text} />
-            <Text style={[styles.wizardSubCatText, draft.isPrivate && { color: "#fff" }]}>Private · Invite Only</Text>
+            <Feather name="lock" size={13} color={draft.isPrivate ? Colors.gold : Colors.textSecondary} />
+            <Text style={[styles.wizardSubCatText, draft.isPrivate && { color: Colors.gold }]}>Private · Invite Only</Text>
           </TouchableOpacity>
         </View>
 
@@ -1731,7 +1743,7 @@ export default function MapScreen() {
               setMode("wizard_location");
             }}
           >
-            <Text style={styles.btnPrimaryText}>Set Path 📍</Text>
+            <Text style={styles.btnPrimaryText}>Set Location</Text>
           </TouchableOpacity>
         </View>
       </BlurView>
@@ -2441,7 +2453,7 @@ export default function MapScreen() {
             <Text
               style={{
                 fontFamily: Typography.body,
-                color: "#666",
+                color: Colors.textSecondary,
                 marginBottom: 15,
               }}
             >
@@ -2550,7 +2562,7 @@ export default function MapScreen() {
             <Text
               style={{
                 fontFamily: Typography.body,
-                color: "#666",
+                color: Colors.textSecondary,
                 marginBottom: 15,
               }}
             >
@@ -2671,8 +2683,8 @@ export default function MapScreen() {
                       position: "absolute",
                       top: -6,
                       right: -8,
-                      backgroundColor: "#FF5722",
-                      color: "#fff",
+                      backgroundColor: Colors.gold,
+                      color: "#1A2421",
                       borderRadius: 10,
                       minWidth: 20,
                       height: 20,
@@ -2704,14 +2716,14 @@ export default function MapScreen() {
           >
             <div
               style={{
-                background: "rgba(255,255,255,0.95)",
+                background: "rgba(26,36,33,0.94)",
                 backdropFilter: "blur(12px)",
                 borderRadius: 14,
                 padding: 8,
                 minWidth: 200,
                 maxWidth: 260,
-                boxShadow: "0 4px 20px rgba(0,0,0,0.15)",
-                border: "1px solid rgba(0,0,0,0.06)",
+                boxShadow: "0 6px 24px rgba(0,0,0,0.4)",
+                border: `1px solid ${Colors.hairline}`,
               }}
             >
               {selectedCluster.events.map((ev, i) => {
@@ -2738,11 +2750,11 @@ export default function MapScreen() {
                       borderRadius: 10,
                       borderBottom:
                         i < selectedCluster.events.length - 1
-                          ? "1px solid rgba(0,0,0,0.05)"
+                          ? "1px solid rgba(255,255,255,0.07)"
                           : "none",
                     }}
                     onMouseEnter={(e) =>
-                      (e.currentTarget.style.background = "rgba(0,0,0,0.04)")
+                      (e.currentTarget.style.background = "rgba(255,255,255,0.06)")
                     }
                     onMouseLeave={(e) =>
                       (e.currentTarget.style.background = "transparent")
@@ -2762,6 +2774,7 @@ export default function MapScreen() {
                         style={{
                           fontSize: 13,
                           fontWeight: 600,
+                          color: "rgba(255,255,255,0.92)",
                           overflow: "hidden",
                           textOverflow: "ellipsis",
                           whiteSpace: "nowrap",
@@ -2769,7 +2782,7 @@ export default function MapScreen() {
                       >
                         {ev.title}
                       </div>
-                      <div style={{ fontSize: 11, color: "#888" }}>
+                      <div style={{ fontSize: 11, color: "rgba(255,255,255,0.45)" }}>
                         {timeStr}
                       </div>
                     </div>
@@ -2795,9 +2808,9 @@ export default function MapScreen() {
       {renderDevTools()}
       {mode === "wizard_details" && renderWizardDetails()}
       {mode === "wizard_location" && renderWizardLocation()}
-      {mode === "event_chat" && <EventChat selectedEvent={selectedEvent} setSelectedEvent={setSelectedEvent} setMode={setMode} user={user} events={events} joinEvent={joinEvent} deleteEvent={deleteEvent} finalizeEvent={finalizeEvent} finalizeChecked={finalizeChecked} setFinalizeChecked={setFinalizeChecked} submitFeedback={submitFeedback} feedbackAnswer={feedbackAnswer} setFeedbackAnswer={setFeedbackAnswer} feedbackSubmitted={feedbackSubmitted} setFeedbackSubmitted={setFeedbackSubmitted} getUserFeedback={getUserFeedback} userFeedbackCache={userFeedbackCache} setUserFeedbackCache={setUserFeedbackCache} creatorStatsCache={creatorStatsCache} setCreatorStatsCache={setCreatorStatsCache} participantNamesCache={participantNamesCache} setParticipantNamesCache={setParticipantNamesCache} getParticipantNames={undefined} tribes={tribes} setProfileViewUid={setProfileViewUid} setSelectedTribe={setSelectedTribe} handleJoin={handleJoin} setFormTribeChecked={setFormTribeChecked} formTribeChecked={formTribeChecked} setWizardDraft={setWizardDraft} setWizardStep={setWizardStep} />}
+      {mode === "event_chat" && <EventChat selectedEvent={liveSelectedEvent} setSelectedEvent={setSelectedEvent} setMode={setMode} user={user} events={events} joinEvent={joinEvent} deleteEvent={deleteEvent} finalizeEvent={finalizeEvent} finalizeChecked={finalizeChecked} setFinalizeChecked={setFinalizeChecked} submitFeedback={submitFeedback} feedbackAnswer={feedbackAnswer} setFeedbackAnswer={setFeedbackAnswer} feedbackSubmitted={feedbackSubmitted} setFeedbackSubmitted={setFeedbackSubmitted} getUserFeedback={getUserFeedback} userFeedbackCache={userFeedbackCache} setUserFeedbackCache={setUserFeedbackCache} creatorStatsCache={creatorStatsCache} setCreatorStatsCache={setCreatorStatsCache} participantNamesCache={participantNamesCache} setParticipantNamesCache={setParticipantNamesCache} getParticipantNames={undefined} tribes={tribes} setProfileViewUid={setProfileViewUid} setSelectedTribe={setSelectedTribe} handleJoin={handleJoin} setFormTribeChecked={setFormTribeChecked} formTribeChecked={formTribeChecked} setWizardDraft={setWizardDraft} setWizardStep={setWizardStep} />}
       {mode === "filters" && renderFilters()}
-      {mode === "tribe_panel" && <TribePanel selectedTribe={selectedTribe} setSelectedTribe={setSelectedTribe} user={user} applyToTribe={applyToTribe} leaveTribe={leaveTribe} showManagement={showManagement} setShowManagement={setShowManagement} announcementText={announcementText} setAnnouncementText={setAnnouncementText} postAnnouncement={postAnnouncement} acceptApplicant={acceptApplicant} rejectApplicant={rejectApplicant} removeMember={removeMember} deleteTribe={deleteTribe} updateTribe={updateTribe} promoteMember={promoteMember} demoteMember={demoteMember} events={events} setMode={setMode} setSelectedEvent={setSelectedEvent} setDraft={setDraft} draft={draft} setProfileViewUid={setProfileViewUid} renderManagementOverlay={renderManagementOverlay} />}
+      {mode === "tribe_panel" && <TribePanel selectedTribe={liveSelectedTribe} setSelectedTribe={setSelectedTribe} user={user} applyToTribe={applyToTribe} leaveTribe={leaveTribe} showManagement={showManagement} setShowManagement={setShowManagement} announcementText={announcementText} setAnnouncementText={setAnnouncementText} postAnnouncement={postAnnouncement} acceptApplicant={acceptApplicant} rejectApplicant={rejectApplicant} removeMember={removeMember} deleteTribe={deleteTribe} updateTribe={updateTribe} promoteMember={promoteMember} demoteMember={demoteMember} events={events} setMode={setMode} setSelectedEvent={setSelectedEvent} setDraft={setDraft} draft={draft} setProfileViewUid={setProfileViewUid} renderManagementOverlay={renderManagementOverlay} />}
       {mode === "create_tribe_wizard" && <CreateTribeWizard wizardDraft={wizardDraft} setWizardDraft={setWizardDraft} wizardStep={wizardStep} setWizardStep={setWizardStep} createTribe={createTribe} setMode={setMode} user={user} formTribeChecked={formTribeChecked} setFormTribeChecked={setFormTribeChecked} />}
       {renderMapSearch()}
       {renderTutorial()}
@@ -2806,514 +2819,3 @@ export default function MapScreen() {
   );
 }
 
-// ---------------- STYLES ---------------- //
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.bg },
-  settingsBtn: { position: "absolute", top: 35, right: 20 },
-  locateBtn: { position: "absolute", top: 95, right: 20 },
-  iconWrapper: {
-    padding: 12,
-    borderRadius: 25,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: Colors.hairline,
-    shadowColor: "#000",
-    shadowOpacity: 0.2,
-    shadowRadius: 10,
-  },
-  inlineIcon: {
-    width: 17,
-    height: 17,
-    resizeMode: "contain",
-    marginHorizontal: 2,
-    transform: [{ translateY: 3 }],
-  },
-
-  devPanel: {
-    position: "absolute",
-    right: 10,
-    top: "50%",
-    transform: [{ translateY: -100 }],
-    backgroundColor: "rgba(200, 50, 50, 0.85)",
-    padding: 12,
-    borderRadius: 12,
-    zIndex: 1000,
-    elevation: 1000,
-    shadowColor: "#000",
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-  },
-  devTitle: {
-    fontFamily: Typography.heading,
-    color: "#fff",
-    fontSize: 10,
-    marginBottom: 6,
-    textAlign: "center",
-    letterSpacing: 1,
-  },
-  devBtn: {
-    backgroundColor: Colors.bgElevated,
-    paddingHorizontal: 6,
-    paddingVertical: 6,
-    borderRadius: 8,
-    marginBottom: 5,
-    elevation: 2,
-  },
-  devBtnText: {
-    fontFamily: Typography.bodyBold,
-    color: "rgba(200, 50, 50, 1)",
-    fontSize: 9,
-    textAlign: "center",
-  },
-
-  topLeft: { position: "absolute", top: 35, left: 20 },
-  balancePill: {
-    overflow: "hidden",
-    width: 54,
-    height: 54,
-    borderRadius: 27,
-    borderWidth: 1,
-    borderColor: Colors.hairline,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  balanceText: {
-    fontFamily: Typography.bodyBold,
-    color: Colors.textPrimary,
-    fontSize: 13,
-    textAlign: "center",
-  },
-
-  upcomingRow: { flexDirection: "row", alignItems: "center" },
-  plusBtn: {
-    width: 54,
-    height: 54,
-    backgroundColor: Colors.glassBtnBg,
-    borderRadius: 27,
-    justifyContent: "center",
-    alignItems: "center",
-    shadowColor: Colors.gold,
-    shadowOpacity: 0.55,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 0 },
-    elevation: 6,
-  },
-  upcomingScroll: { marginLeft: 12, maxWidth: 220 },
-  upcomingIcon: {
-    width: 40,
-    height: 40,
-    backgroundColor: Colors.glassBtnBg,
-    borderRadius: 20,
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 10,
-    shadowColor: Colors.gold,
-    shadowOpacity: 0.45,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 0 },
-    elevation: 5,
-  },
-  upcomingInitial: {
-    fontFamily: Typography.bodyBold,
-    color: Colors.textPrimary,
-    fontSize: 15,
-  },
-
-  bottomBar: {
-    position: "absolute",
-    bottom: 35,
-    left: 20,
-    right: 20,
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  dateSliderContainer: {
-    flex: 1,
-    marginRight: 15,
-    borderRadius: 24,
-    paddingVertical: 4,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: Colors.hairline,
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  scrollIndicatorLeft: {
-    position: "absolute",
-    left: 0,
-    zIndex: 10,
-    padding: 8,
-  },
-  scrollIndicatorRight: {
-    position: "absolute",
-    right: 0,
-    zIndex: 10,
-    padding: 8,
-  },
-  datePill: {
-    backgroundColor: "transparent",
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 18,
-    marginRight: 6,
-  },
-  datePillActive: {
-    backgroundColor: Colors.gold,
-  },
-  datePillText: {
-    fontFamily: Typography.bodySemibold,
-    color: Colors.textSecondary,
-    fontSize: 13,
-  },
-  datePillTextActive: { color: '#1A2421' },
-
-  filterBtn: { borderRadius: 24, overflow: "hidden" },
-  filterBtnWrapper: {
-    paddingHorizontal: 18,
-    paddingVertical: 14,
-    borderWidth: 1,
-    borderColor: Colors.hairline,
-  },
-  filterBtnText: {
-    fontFamily: Typography.bodySemibold,
-    color: Colors.textSecondary,
-    fontSize: 13,
-  },
-
-  wizardCat: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: Colors.hairline,
-    marginRight: 8,
-    backgroundColor: Colors.bgInput,
-  },
-  wizardCatText: {
-    fontFamily: Typography.bodyBold,
-    fontSize: 13,
-    color: Colors.textPrimary,
-    marginLeft: 6,
-  },
-  wizardSubCat: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: Colors.bgInput,
-    borderWidth: 1,
-    borderColor: Colors.hairline,
-    marginRight: 8,
-  },
-  wizardSubCatActive: {
-    backgroundColor: Colors.goldDim,
-    borderColor: Colors.goldBorder,
-  },
-  wizardSubCatText: {
-    fontFamily: Typography.bodySemibold,
-    fontSize: 13,
-    color: Colors.textSecondary,
-  },
-
-  filterGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-    marginTop: 15,
-  },
-  filterCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: Colors.hairline,
-    backgroundColor: Colors.bgInput,
-    width: "48%",
-  },
-  filterCardActive: {
-    borderColor: Colors.goldBorder,
-    backgroundColor: Colors.goldDim,
-  },
-  filterCardText: {
-    fontFamily: Typography.bodyBold,
-    fontSize: 14,
-    marginLeft: 8,
-    color: Colors.textPrimary,
-  },
-
-  glassWrapperBottom: {
-    position: "absolute",
-    bottom: 35,
-    left: 20,
-    right: 20,
-    borderRadius: 24,
-    overflow: "hidden",
-    shadowColor: "#000",
-    shadowOpacity: 0.3,
-    shadowRadius: 25,
-  },
-  glassWrapperBottomFull: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: "60%",
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    overflow: "hidden",
-    shadowColor: "#000",
-    shadowOpacity: 0.3,
-    shadowRadius: 30,
-    zIndex: 100,
-    elevation: 100,
-  },
-  glassWrapperTop: {
-    position: "absolute",
-    top: 40,
-    left: 20,
-    right: 20,
-    borderRadius: 24,
-    overflow: "hidden",
-    shadowColor: "#000",
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    zIndex: 100,
-    elevation: 100,
-  },
-
-  glassPanelBottom: {
-    padding: 25,
-    backgroundColor: Colors.bg,
-    borderWidth: 1,
-    borderColor: Colors.hairline,
-  },
-  glassPanelBottomFull: {
-    padding: 30,
-    backgroundColor: Colors.bg,
-    borderWidth: 1,
-    borderColor: Colors.hairline,
-    flex: 1,
-  },
-  glassPanelTop: { padding: 25, backgroundColor: Colors.bg },
-
-  panelTitle: {
-    fontFamily: Typography.headline,
-    fontSize: 24,
-    color: Colors.textPrimary,
-    marginBottom: 20,
-  },
-  panelTitleDark: {
-    fontFamily: Typography.headline,
-    fontSize: 22,
-    color: Colors.textPrimary,
-    marginBottom: 5,
-  },
-  panelSubDark: {
-    fontFamily: Typography.body,
-    fontSize: 14,
-    color: Colors.textSecondary,
-    marginBottom: 20,
-  },
-  input: {
-    fontFamily: Typography.body,
-    borderWidth: 1,
-    borderColor: Colors.borderInput,
-    backgroundColor: Colors.bgInput,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 15,
-    fontSize: 15,
-    color: Colors.textPrimary,
-  },
-  suggestionsContainer: {
-    backgroundColor: Colors.bgElevated,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: Colors.hairline,
-    maxHeight: 120,
-    overflow: "hidden",
-    marginTop: -5,
-    marginBottom: 15,
-  },
-  suggestionItem: {
-    padding: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.hairline,
-  },
-  suggestionText: {
-    fontFamily: Typography.body,
-    fontSize: 13,
-    color: Colors.textPrimary,
-  },
-
-  row: { flexDirection: "row", gap: 10, justifyContent: "flex-end" },
-  btnPrimary: {
-    backgroundColor: Colors.glassBtnBg,
-    paddingHorizontal: 24,
-    height: 56,
-    borderRadius: 9999,
-    borderWidth: 1,
-    borderColor: Colors.gold,
-    alignItems: "center",
-    justifyContent: "center",
-    flexDirection: "row",
-    gap: 6,
-  },
-  btnPrimaryFull: {
-    backgroundColor: Colors.glassBtnBg,
-    height: 56,
-    borderRadius: 9999,
-    alignItems: "center",
-    justifyContent: "center",
-    flexDirection: "row",
-    gap: 6,
-    width: "100%",
-    marginTop: 20,
-    borderWidth: 1,
-    borderColor: Colors.gold,
-  },
-  btnPrimaryText: {
-    fontFamily: Typography.bodyBold,
-    color: Colors.textPrimary,
-    fontSize: 15,
-    letterSpacing: 0.2,
-  },
-  btnSecondary: {
-    backgroundColor: "transparent",
-    paddingHorizontal: 15,
-    height: 56,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  btnSecondaryText: {
-    fontFamily: Typography.bodyBold,
-    color: Colors.textSecondary,
-    fontSize: 15,
-  },
-  btnSecondaryTextDark: {
-    fontFamily: Typography.bodyBold,
-    color: Colors.textSecondary,
-    fontSize: 15,
-  },
-
-  chatHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  chatTitle: {
-    fontFamily: Typography.headline,
-    fontSize: 22,
-    color: Colors.textPrimary,
-  },
-  chatSub: {
-    fontFamily: Typography.body,
-    fontSize: 12,
-    color: Colors.gold,
-    marginTop: 4,
-  },
-  closeIcon: { fontSize: 20, color: Colors.textSecondary, paddingHorizontal: 5 },
-  chatLoc: {
-    fontFamily: Typography.body,
-    fontSize: 13,
-    color: Colors.textLight,
-    paddingBottom: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.hairline,
-    marginBottom: 15,
-  },
-
-  chatLocked: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 30,
-  },
-  chatLockedIco: { fontSize: 45, marginBottom: 15 },
-  chatLockedTitle: {
-    fontFamily: Typography.headline,
-    fontSize: 24,
-    color: Colors.textPrimary,
-    marginBottom: 10,
-    textAlign: "center",
-  },
-  chatLockedSub: {
-    fontFamily: Typography.body,
-    fontSize: 15,
-    color: Colors.textSecondary,
-    textAlign: "center",
-    lineHeight: 22,
-  },
-
-  chatOpen: { flex: 1 },
-  chatScroll: { flex: 1 },
-  chatBubble: {
-    backgroundColor: "rgba(255,255,255,0.06)",
-    padding: 18,
-    borderRadius: 20,
-    alignSelf: "flex-start",
-    borderBottomLeftRadius: 5,
-    borderWidth: 1,
-    borderColor: Colors.hairline,
-  },
-  chatText: { fontFamily: Typography.body, color: Colors.textPrimary, fontSize: 14 },
-  chatInputRow: {
-    flexDirection: "row",
-    gap: 10,
-    paddingTop: 15,
-    borderTopWidth: 1,
-    borderTopColor: Colors.hairline,
-  },
-  chatInput: {
-    flex: 1,
-    fontFamily: Typography.body,
-    backgroundColor: Colors.bgInput,
-    borderRadius: 20,
-    paddingHorizontal: 20,
-    borderWidth: 1,
-    borderColor: Colors.borderInput,
-    color: Colors.textPrimary,
-  },
-
-  pinBase: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: Colors.sage,
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.6)',
-    justifyContent: "center",
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.35,
-    shadowRadius: 5,
-  },
-  pinPublic: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: Colors.gold,
-  },
-  pinPrivate: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    backgroundColor: "rgba(107, 142, 107, 0.2)",
-    borderWidth: 1,
-    borderColor: Colors.sage,
-  },
-  pinDraft: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: Colors.gold,
-    elevation: 10,
-    borderWidth: 3,
-    borderColor: 'rgba(255,255,255,0.5)',
-  },
-  pinExternal: { backgroundColor: Colors.sage },
-});

@@ -1,5 +1,4 @@
-import React, { useState } from 'react';
-import { styles } from './MapStyles';
+import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { Feather } from '@expo/vector-icons';

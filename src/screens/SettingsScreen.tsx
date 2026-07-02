@@ -22,10 +22,11 @@ export default function SettingsScreen() {
   const [description, setDescription] = useState(user?.description || '');
   const [locationName, setLocationName] = useState(user?.locationName || '');
   const [locationInput, setLocationInput] = useState(user?.locationName || '');
-  const [locationCoords, setLocationCoords] = useState<{ lat: number; lng: number } | null>({
-    lat: user?.homeLocation?.latitude || 0,
-    lng: user?.homeLocation?.longitude || 0,
-  });
+  const [locationCoords, setLocationCoords] = useState<{ lat: number; lng: number } | null>(
+    user?.homeLocation
+      ? { lat: user.homeLocation.latitude, lng: user.homeLocation.longitude }
+      : null,
+  );
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -58,7 +59,7 @@ export default function SettingsScreen() {
     finally { setLoading(false); }
   };
 
-  const canSave = !!displayName.trim() && !!locationName.trim() && !loading;
+  const canSave = !!displayName.trim() && !!locationName.trim() && !!locationCoords && !loading;
 
   return (
     <KeyboardAvoidingView

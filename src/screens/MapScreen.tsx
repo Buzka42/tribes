@@ -25,6 +25,7 @@ import { format, isToday, isTomorrow, isWeekend, addDays, startOfWeek, endOfWeek
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { notify, confirmDialog } from '../utils/dialogs';
 import { useI18n } from '../i18n';
+import { getMapStyleUrl } from '../utils/mapStyle';
 import { Feather } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { EVENT_CATEGORIES, CategoryGroupId } from '../data/categories';
@@ -127,6 +128,14 @@ export default function MapScreen() {
   const cameraRef = React.useRef<any>(null);
   const [scrollX, setScrollX] = useState(0);
   const [currentZoom, setCurrentZoom] = useState(13);
+
+  // Day = stock Mapbox style, night = the app's custom forest style.
+  // Re-checked periodically so a long-lived session crosses the boundary.
+  const [mapStyleUrl, setMapStyleUrl] = useState(getMapStyleUrl);
+  React.useEffect(() => {
+    const id = setInterval(() => setMapStyleUrl(getMapStyleUrl()), 15 * 60 * 1000);
+    return () => clearInterval(id);
+  }, []);
 
   const [wizardQuery, setWizardQuery] = useState('');
   const [wizardSuggestions, setWizardSuggestions] = useState<any[]>([]);
@@ -1104,7 +1113,7 @@ export default function MapScreen() {
         logoEnabled={false}
         attributionEnabled={false}
         onPress={handleMapPress}
-        styleURL="mapbox://styles/tribes024/cmnr95i12000x01sc6y2845lo"
+        styleURL={mapStyleUrl}
         onCameraChanged={(e: any) => { const z = e?.properties?.zoomLevel; if (z !== undefined) setCurrentZoom(z); }}
       >
         <Mapbox.Camera

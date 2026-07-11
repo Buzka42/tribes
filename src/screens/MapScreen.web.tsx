@@ -42,6 +42,7 @@ import { Feather } from "@expo/vector-icons";
 import { EVENT_CATEGORIES, CategoryGroupId } from "../data/categories";
 import { SPIRIT_ASSETS, SPIRIT_LABELS, renderMoons } from "../utils/assets";
 import { notify, confirmDialog } from "../utils/dialogs";
+import { getMapStyleUrl } from "../utils/mapStyle";
 import { useI18n } from "../i18n";
 
 import Map, { Marker, Layer, Source, MapMouseEvent } from "react-map-gl/mapbox";
@@ -185,6 +186,14 @@ export default function MapScreen() {
   const mapRef = React.useRef<any>(null);
   const [scrollX, setScrollX] = useState(0);
   const [currentZoom, setCurrentZoom] = useState(12.5);
+
+  // Day = stock Mapbox style, night = the app's custom forest style.
+  // Re-checked periodically so a long-lived session crosses the boundary.
+  const [mapStyleUrl, setMapStyleUrl] = useState(getMapStyleUrl);
+  React.useEffect(() => {
+    const id = setInterval(() => setMapStyleUrl(getMapStyleUrl()), 15 * 60 * 1000);
+    return () => clearInterval(id);
+  }, []);
 
   const [wizardQuery, setWizardQuery] = useState("");
   const [wizardSuggestions, setWizardSuggestions] = useState<any[]>([]);
@@ -2709,7 +2718,7 @@ export default function MapScreen() {
           zoom: 12.5,
         }}
         style={{ width: "100%", height: "100%" }}
-        mapStyle="mapbox://styles/tribes024/cmnr95i12000x01sc6y2845lo"
+        mapStyle={mapStyleUrl}
         mapboxAccessToken={MAPBOX_TOKEN}
         attributionControl={false}
         onClick={handleMapClick}

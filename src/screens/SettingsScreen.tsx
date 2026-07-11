@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View, StyleSheet, Text, TouchableOpacity, TextInput,
   KeyboardAvoidingView, Platform, ScrollView, Linking,
@@ -6,6 +6,7 @@ import {
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../hooks/useAuth';
 import { useI18n, LanguagePreference } from '../i18n';
 import { Colors, Typography } from '../theme';
@@ -13,12 +14,24 @@ import { Feather } from '@expo/vector-icons';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
+import { INTRO_EVERY_LAUNCH_KEY } from '../utils/introPrefs';
 
 export default function SettingsScreen() {
   const { user } = useAuth();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const insets = useSafeAreaInsets();
   const { t, preference, setPreference } = useI18n();
+
+  const [introEveryLaunch, setIntroEveryLaunch] = useState(false);
+  useEffect(() => {
+    AsyncStorage.getItem(INTRO_EVERY_LAUNCH_KEY)
+      .then((v) => setIntroEveryLaunch(v === '1'))
+      .catch(() => {});
+  }, []);
+  const setIntroPreference = (value: boolean) => {
+    setIntroEveryLaunch(value);
+    AsyncStorage.setItem(INTRO_EVERY_LAUNCH_KEY, value ? '1' : '0').catch(() => {});
+  };
 
   const [displayName, setDisplayName] = useState(user?.displayName || '');
   const [dateOfBirth, setDateOfBirth] = useState(user?.dateOfBirth || '');
@@ -179,6 +192,27 @@ export default function SettingsScreen() {
           ))}
         </View>
         <Text style={styles.languageHint}>{t('settings.languageHint')}</Text>
+
+        {/* Intro */}
+        <Text style={styles.fieldLabel}>{t('settings.intro')}</Text>
+        <View style={styles.chipRow}>
+          {([
+            { value: false, label: t('settings.introFirstLaunch') },
+            { value: true, label: t('settings.introEveryLaunch') },
+          ] as { value: boolean; label: string }[]).map(opt => (
+            <TouchableOpacity
+              key={String(opt.value)}
+              onPress={() => setIntroPreference(opt.value)}
+              style={[styles.chip, introEveryLaunch === opt.value && styles.chipActive]}
+              activeOpacity={0.75}
+            >
+              <Text style={[styles.chipText, introEveryLaunch === opt.value && styles.chipTextActive]}>
+                {opt.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        <Text style={styles.languageHint}>{t('settings.introHint')}</Text>
 
         {/* Divider before save */}
         <View style={styles.hairline} />

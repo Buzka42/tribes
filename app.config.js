@@ -13,5 +13,6 @@ module.exports = () => ({
       },
     ],
     '@react-native-community/datetimepicker',
+    'expo-video',
   ],
 });
